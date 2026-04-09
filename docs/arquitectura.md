@@ -13,7 +13,7 @@ La prioridad de esta fase es rapidez de implementación, claridad técnica y fac
 
 Arquitectura tipo cliente-servidor con separación por capas:
 
-- Frontend web (React + Vite + TypeScript): interfaz conversacional.
+- Frontend web (React + Vite + TypeScript + shadcn/ui): interfaz conversacional.
 - Backend API (Node.js + Express en JavaScript): orquestación de prompts, sesión y respuestas.
 - Servicio LLM: generación de contenido para cada personalidad usando `llama-3.3-70b-versatile`.
 - Almacenamiento ligero: sesiones, mensajes y configuración de personalidades.

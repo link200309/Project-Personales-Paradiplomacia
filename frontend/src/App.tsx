@@ -1,10 +1,11 @@
-import './App.css'
+import { AppProviders } from "@/app/providers"
+import { AppRouter } from "@/app/router"
 
 function App() {
   return (
-    <div>
-      <h1 >Hola mundo</h1>
-    </div>
+    <AppProviders>
+      <AppRouter />
+    </AppProviders>
   )
 }
 
