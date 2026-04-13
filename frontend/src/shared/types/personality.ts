@@ -5,4 +5,6 @@ export interface Personality {
   name: string
   roleDescription: string
   styleGuide: string
+  baseInstructions: string
+  thematicLimits: string[]
 }

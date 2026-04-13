@@ -20,3 +20,10 @@ export interface ComparativeResult {
   responses: ComparativeResponse[]
   optionalSummary?: string
 }
+
+export interface ComparativeTurn {
+  id: string
+  prompt: string
+  createdAt: string
+  result: ComparativeResult
+}

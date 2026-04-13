@@ -9,7 +9,7 @@ const Sidebar = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "flex h-full w-64 flex-col border-r bg-background",
+      "flex h-full w-full lg:w-64 flex-col border-r bg-background",
       className
     )}
     {...props}
@@ -23,7 +23,7 @@ const SidebarHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("border-b px-4 py-3", className)}
+    className={cn("border-b px-3 sm:px-4 py-2 sm:py-3", className)}
     {...props}
   />
 ))
@@ -35,7 +35,7 @@ const SidebarContent = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex-1 overflow-y-auto px-4 py-3", className)}
+    className={cn("flex-1 overflow-y-auto px-3 sm:px-4 py-2 sm:py-3", className)}
     {...props}
   />
 ))
@@ -47,7 +47,7 @@ const SidebarFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("border-t px-4 py-3", className)}
+    className={cn("border-t px-3 sm:px-4 py-2 sm:py-3", className)}
     {...props}
   />
 ))
@@ -60,7 +60,7 @@ const SidebarItem = React.forwardRef<
   <button
     ref={ref}
     className={cn(
-      "w-full px-3 py-2 rounded-md text-left text-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+      "w-full px-2 sm:px-3 py-2 rounded-md text-left text-xs sm:text-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
       className
     )}
     {...props}

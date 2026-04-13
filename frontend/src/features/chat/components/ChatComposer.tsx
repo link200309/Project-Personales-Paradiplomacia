@@ -17,8 +17,8 @@ export function ChatComposer({ mode, value, loading, onChange, onSubmit }: ChatC
       <Textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={mode === "individual" ? "Ask a question for the selected expert..." : "Type one topic for comparative analysis..."}
-        className="min-h-14 pr-17"
+        placeholder={mode === "individual" ? "Haz una pregunta al experto seleccionado..." : "Escribe un tema para análisis comparativo..."}
+        className="min-h-14 pr-17 resize-none"
       />
       <div className="flex absolute right-3 top-3">
         <Button type="button" onClick={onSubmit} disabled={loading || !value.trim()}>

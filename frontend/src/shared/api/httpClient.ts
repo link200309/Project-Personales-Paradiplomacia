@@ -1,9 +1,11 @@
-interface RequestOptions extends RequestInit {
+interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001/api"
+
 export async function httpClient<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -13,7 +15,8 @@ export async function httpClient<T>(path: string, options: RequestOptions = {}):
   })
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`)
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null
+    throw new Error(errorPayload?.message ?? `Request failed with status ${response.status}`)
   }
 
   return response.json() as Promise<T>

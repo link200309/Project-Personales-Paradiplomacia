@@ -1,119 +1,209 @@
-import { useState } from "react"
+import { useCallback, useState } from "react"
 
-import type { ComparativeResult, ChatMessage } from "@/shared/types/chat"
-import type { Personality, PersonalityId } from "@/shared/types/personality"
-import { normalizeResponse } from "@/shared/utils/normalizeResponse"
+import { httpClient } from "@/shared/api/httpClient"
+import type { ComparativeResult, ComparativeTurn, ChatMessage } from "@/shared/types/chat"
+import type { PersonalityId } from "@/shared/types/personality"
 
 interface SendIndividualParams {
+  sessionId: string
   personalityId: PersonalityId
   message: string
 }
 
 interface SendComparativeParams {
+  sessionId: string
   message: string
-  personalities: Personality[]
 }
 
-const personalityPrefixes: Record<PersonalityId, string> = {
-  economist: `Tu texto está bien planteado, pero se puede mejorar en fluidez, claridad y precisión institucional. Te dejo una versión corregida y optimizada 👇
+interface IndividualChatResponse {
+  response: ChatMessage
+}
 
-El Sistema Universitario Boliviano (SUB), a través del Comité Ejecutivo de la Universidad Boliviana (CEUB), impulsa la adopción del Modelo CUDIE, una propuesta desarrollada por la Dirección de Relaciones Internacionales de la Universidad Mayor de San Simón (UMSS), que fortalece la cooperación y la modernización institucional en el ámbito de las relaciones internacionales.
+interface ComparativeChatResponse extends ComparativeResult {}
 
-Este modelo promueve:
+interface SessionMessagesResponse {
+  messages: ChatMessage[]
+}
 
-🔹 Comunicación orgánica entre universidades del Sistema Universitario Boliviano.
-🔹 Participación activa de las diferentes unidades y actores (facultades y autoridades) en procesos estratégicos.
-🔹 Acceso a información oportuna para la toma de decisiones.
-🔹 Planificación coordinada y alineada a nivel institucional.
+const comparativePersonalityNames: Record<PersonalityId, string> = {
+  economist: "Economista",
+  politest: "Politest",
+  jurist: "Jurista",
+}
 
-La implementación del Modelo CUDIE representa un paso importante hacia una gestión más articulada, inclusiva y estratégica en nuestras universidades.
+const comparativeSummaryPrefix = "## Sintesis institucional"
 
-#UMSS #CEUB #CUDIE #EducaciónSuperior #Internacionalización #GestiónUniversitaria
+function buildComparativeTurns(messages: ChatMessage[]): ComparativeTurn[] {
+  const turns: ComparativeTurn[] = []
+  let currentTurn: ComparativeTurn | null = null
 
-Cambios clave que hice:
-Eliminé la repetición de “una iniciativa” para evitar redundancia.
-Cambié “de universidades” → “entre universidades” (más correcto).
-Simplifiqué “procesos estratégicos de comunicación” → “procesos estratégicos” (más claro y general).
-Ajusté la puntuación y fluidez general.
+  for (const message of messages) {
+    if (message.role === "user") {
+      if (currentTurn) {
+        turns.push(currentTurn)
+      }
 
-Si quieres, puedo hacerte una versión más corta (tipo copy publicitario) o una más institucional/formal 👍`,
-  politest: "From a political strategy lens",
-  jurist: "From a legal and institutional standpoint",
+      currentTurn = {
+        id: message.id,
+        prompt: message.content,
+        createdAt: message.createdAt,
+        result: {
+          responses: [],
+        },
+      }
+
+      continue
+    }
+
+    if (!currentTurn || message.role !== "assistant") {
+      continue
+    }
+
+    if (message.personalityId) {
+      currentTurn.result.responses.push({
+        personalityId: message.personalityId,
+        personalityName: comparativePersonalityNames[message.personalityId],
+        content: message.content,
+      })
+      continue
+    }
+
+    if (message.content.startsWith(comparativeSummaryPrefix)) {
+      currentTurn.result.optionalSummary = message.content.replace(`${comparativeSummaryPrefix}\n`, "").trim()
+    }
+  }
+
+  if (currentTurn) {
+    turns.push(currentTurn)
+  }
+
+  return turns.filter((turn) => turn.result.responses.length > 0)
 }
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [comparativeResult, setComparativeResult] = useState<ComparativeResult | null>(null)
+  const [comparativeHistory, setComparativeHistory] = useState<ComparativeTurn[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   function appendMessage(message: ChatMessage) {
     setMessages((current) => [...current, message])
   }
 
-  async function sendIndividual({ personalityId, message }: SendIndividualParams) {
+  async function sendIndividual({ sessionId, personalityId, message }: SendIndividualParams) {
     setErrorMessage(null)
 
     const now = new Date().toISOString()
-    appendMessage({
+    const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
       content: message,
       createdAt: now,
-    })
+    }
 
-    const response = normalizeResponse(
-      `${personalityPrefixes[personalityId]}, this MVP answer suggests creating a phased roadmap with measurable indicators and local stakeholder mapping.`
-    )
+    appendMessage(userMessage)
 
-    appendMessage({
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content: response,
-      createdAt: new Date().toISOString(),
-      personalityId,
-    })
+    try {
+      const result = await httpClient<IndividualChatResponse>("/chat/individual", {
+        method: "POST",
+        body: {
+          sessionId,
+          personalityId,
+          message,
+        },
+      })
+
+      appendMessage(result.response)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo obtener respuesta.")
+      setMessages((current) => current.filter((item) => item.id !== userMessage.id))
+    }
   }
 
-  async function sendComparative({ message, personalities }: SendComparativeParams) {
+  async function sendComparative({ sessionId, message }: SendComparativeParams) {
     setErrorMessage(null)
 
-    appendMessage({
+    const now = new Date().toISOString()
+    const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
       content: message,
-      createdAt: new Date().toISOString(),
-    })
+      createdAt: now,
+    }
 
-    const responses = personalities.map((personality) => ({
-      personalityId: personality.id,
-      personalityName: personality.name,
-      content: normalizeResponse(
-        `${personalityPrefixes[personality.id]}, the proposed line of action on "${message}" should be piloted with clear governance, timeline, and validation checkpoints.`
-      ),
-    }))
+    appendMessage(userMessage)
 
-    setComparativeResult({
-      responses,
-      optionalSummary:
-        "All three perspectives agree on piloting with clear accountability. They differ on the first priority: budget certainty, coalition viability, and legal safeguards.",
-    })
+    try {
+      const result = await httpClient<ComparativeChatResponse>("/chat/comparative", {
+        method: "POST",
+        body: {
+          sessionId,
+          message,
+        },
+      })
+
+      setComparativeResult(result)
+      setComparativeHistory((current) => [
+        ...current,
+        {
+          id: userMessage.id,
+          prompt: message,
+          createdAt: now,
+          result,
+        },
+      ])
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo obtener la comparación.")
+      setMessages((current) => current.filter((item) => item.id !== userMessage.id))
+    }
   }
+
+  const loadComparativeSession = useCallback(async (sessionId: string) => {
+    try {
+      const result = await httpClient<SessionMessagesResponse>(`/sessions/${sessionId}/messages`)
+      const turns = buildComparativeTurns(result.messages)
+      setComparativeHistory(turns)
+      setComparativeResult(turns.at(-1)?.result ?? null)
+    } catch (error) {
+      setComparativeResult(null)
+      setComparativeHistory([])
+      const message = error instanceof Error ? error.message : "No se pudo cargar el comparativo."
+      if (message.includes("No comparative messages found") || message.includes("No comparative responses found")) {
+        setErrorMessage(null)
+        return
+      }
+      setErrorMessage(message)
+    }
+  }, [])
 
   function clearComparativeResult() {
     setComparativeResult(null)
+    setComparativeHistory([])
   }
 
   function clearMessages() {
     setMessages([])
   }
 
+  const loadSessionMessages = useCallback(async (sessionId: string) => {
+    try {
+      const result = await httpClient<SessionMessagesResponse>(`/sessions/${sessionId}/messages`)
+      setMessages(result.messages)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo cargar el historial.")
+    }
+  }, [])
+
   return {
     messages,
     comparativeResult,
+    comparativeHistory,
     errorMessage,
     sendIndividual,
     sendComparative,
+    loadComparativeSession,
     clearComparativeResult,
     clearMessages,
+    loadSessionMessages,
   }
 }
