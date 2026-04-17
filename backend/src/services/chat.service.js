@@ -1,6 +1,7 @@
 import { getPersonalityById } from "./personalities.service.js"
 import { generateChatCompletion } from "./llm.service.js"
-import { addMessage, ensureSession, listSessionMessages } from "./sessions.service.js"
+import { addMessage, ensureSessionForUser, listSessionMessages } from "./sessions.service.js"
+import { updateSession } from "../repositories/sessions.repository.js"
 import { PERSONALITY_IDS } from "../utils/constants.js"
 
 const MAX_CONTEXT_MESSAGES = 6
@@ -138,7 +139,7 @@ function buildUserPrompt({ contextText, userMessage }) {
   ].join("\n")
 }
 
-export async function processIndividualChat({ sessionId, personalityId, message }) {
+export async function processIndividualChat({ sessionId, personalityId, message, userId }) {
   const normalizedMessage = String(message ?? "").trim()
   if (!normalizedMessage) {
     const error = new Error("Message is required")
@@ -153,7 +154,15 @@ export async function processIndividualChat({ sessionId, personalityId, message 
     throw error
   }
 
-  const session = await ensureSession(sessionId, "individual")
+  const session = await ensureSessionForUser({ sessionId, mode: "individual", userId })
+
+  const sessionPersonalityId = session.personalityId ?? personalityId
+  if (!session.personalityId && sessionPersonalityId) {
+    await updateSession(session.id, {
+      personalityId: sessionPersonalityId,
+      title: personality.name,
+    })
+  }
 
   const userMessage = {
     id: crypto.randomUUID(),
@@ -164,7 +173,7 @@ export async function processIndividualChat({ sessionId, personalityId, message 
 
   await addMessage(session.id, userMessage)
 
-  const history = await listSessionMessages(session.id)
+  const history = await listSessionMessages(session.id, userId)
   const { contextSlice, contextText } = buildContext(history)
 
   const systemPrompt = buildSystemPrompt(personality)
@@ -206,7 +215,7 @@ export async function processIndividualChat({ sessionId, personalityId, message 
     role: "assistant",
     content: assistantContent,
     createdAt: new Date().toISOString(),
-    personalityId,
+    personalityId: sessionPersonalityId,
   }
 
   const savedAssistantMessage = await addMessage(session.id, assistantMessage)
@@ -215,7 +224,7 @@ export async function processIndividualChat({ sessionId, personalityId, message 
     sessionId: session.id,
     response: savedAssistantMessage,
     metadata: {
-      personalityId,
+      personalityId: sessionPersonalityId,
       contextWindow: MAX_CONTEXT_MESSAGES,
       contextUsed: contextSlice.length,
       usedFallback,

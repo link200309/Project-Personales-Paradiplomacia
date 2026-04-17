@@ -3,6 +3,7 @@ import express from "express"
 
 import { env } from "./config/env.js"
 import { errorHandler } from "./middlewares/errorHandler.js"
+import { resolveUserMiddleware } from "./middlewares/resolveUser.js"
 import { apiRouter } from "./routes/index.js"
 
 export function createApp() {
@@ -19,6 +20,7 @@ export function createApp() {
     res.status(200).json({ status: "ok" })
   })
 
+  app.use(resolveUserMiddleware)
   app.use("/api", apiRouter)
   app.use(errorHandler)
 

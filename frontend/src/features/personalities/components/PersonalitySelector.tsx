@@ -6,9 +6,10 @@ interface PersonalitySelectorProps {
   selectedPersonalityId: PersonalityId
   onSelect: (personalityId: PersonalityId) => void
   compact?: boolean
+  disabled?: boolean
 }
 
-export function PersonalitySelector({ personalities, selectedPersonalityId, onSelect, compact = false }: PersonalitySelectorProps) {
+export function PersonalitySelector({ personalities, selectedPersonalityId, onSelect, compact = false, disabled = false }: PersonalitySelectorProps) {
   return (
     <div className={compact ? "grid gap-2 sm:grid-cols-3" : "grid gap-2 sm:grid-cols-3"}>
       {personalities.map((personality) => {
@@ -24,6 +25,7 @@ export function PersonalitySelector({ personalities, selectedPersonalityId, onSe
                 ? "h-10 justify-start rounded-full px-4 text-sm"
                 : "h-auto min-h-20 flex-col items-start gap-1 p-3 text-left"
             }
+            disabled={disabled}
             onClick={() => onSelect(personality.id)}
           >
             <span className="text-sm font-semibold">{personality.name}</span>

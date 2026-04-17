@@ -9,7 +9,7 @@ export function Header() {
           Espacio de trabajo de política conversacional
         </h1>
         <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-[0.95rem]">
-          Consulta paradiplomacia desde una conversación guiada por perfiles disciplinares, con historial persistente y modo comparativo.
+          Consulta paradiplomacia desde una conversación guiada por perfiles disciplinares, con historial persistente, modo comparativo y mesa redonda de debate.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">

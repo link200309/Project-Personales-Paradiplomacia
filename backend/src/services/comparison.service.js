@@ -1,6 +1,6 @@
 import { generateChatCompletion } from "./llm.service.js"
 import { getPersonalities } from "./personalities.service.js"
-import { addMessage, ensureSession, listSessionMessages } from "./sessions.service.js"
+import { addMessage, ensureSessionForUser, listSessionMessages } from "./sessions.service.js"
 
 const MAX_TOPIC_LENGTH = 1200
 const COMPARATIVE_MAX_TOKENS = 700
@@ -102,7 +102,7 @@ function buildFallbackResponse(personalityName, topic) {
   ].join("\n\n")
 }
 
-export async function processComparativeChat({ sessionId, message, personalityIds }) {
+export async function processComparativeChat({ sessionId, message, personalityIds, userId }) {
   const normalizedMessage = String(message ?? "").trim()
   if (!normalizedMessage) {
     const error = new Error("Message is required")
@@ -127,7 +127,7 @@ export async function processComparativeChat({ sessionId, message, personalityId
     throw error
   }
 
-  const session = await ensureSession(sessionId, "comparative")
+  const session = await ensureSessionForUser({ sessionId, mode: "comparative", userId })
 
   const userMessage = {
     id: crypto.randomUUID(),
@@ -217,14 +217,14 @@ export async function processComparativeChat({ sessionId, message, personalityId
   }
 }
 
-export async function getComparativeResultBySessionId(sessionId) {
+export async function getComparativeResultBySessionId(sessionId, userId) {
   if (!sessionId) {
     const error = new Error("Session id is required")
     error.statusCode = 400
     throw error
   }
 
-  const messages = await listSessionMessages(sessionId)
+  const messages = await listSessionMessages(sessionId, userId)
   const lastUserIndex = messages.map((message) => message.role).lastIndexOf("user")
 
   if (lastUserIndex < 0) {

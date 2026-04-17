@@ -1,10 +1,13 @@
 import {
   appendSessionMessage,
   createSession,
-  getSessionById,
+  getUserSession,
+  getUserSessionById,
   getSessionMessages,
   listSessions,
+  updateSession,
 } from "../repositories/sessions.repository.js"
+import { getPersonalityById } from "./personalities.service.js"
 
 function mapMessage(message) {
   return {
@@ -21,36 +24,89 @@ function mapSession(session) {
 }
 
 export async function ensureSession(sessionId, mode = "individual") {
+  return ensureSessionForUser({ sessionId, mode, userId: null })
+}
+
+export async function ensureSessionForUser({ sessionId, mode = "individual", userId }) {
+  if (!userId) {
+    const error = new Error("userId is required")
+    error.statusCode = 400
+    throw error
+  }
+
   if (!sessionId) {
-    const created = await createSession(mode)
+    const created = await createSession({ mode, userId })
     return mapSession(created)
   }
 
-  const existing = await getSessionById(sessionId)
+  const existing = await getUserSessionById(sessionId, userId)
   if (existing) {
     return mapSession(existing)
   }
 
-  const created = await createSession(mode, sessionId)
+  const created = await createSession({ mode, userId, forcedId: sessionId })
   return mapSession(created)
 }
 
-export async function createNewSession(mode = "individual") {
-  const session = await createSession(mode)
+export async function createNewSession(mode = "individual", userId, personalityId = null) {
+  if (!userId) {
+    const error = new Error("userId is required")
+    error.statusCode = 400
+    throw error
+  }
+
+  let title = null
+  let resolvedPersonalityId = null
+
+  if (mode === "individual" && personalityId) {
+    const personality = await getPersonalityById(personalityId)
+    if (personality) {
+      resolvedPersonalityId = personality.id
+      title = personality.name
+    }
+  }
+
+  const session = await createSession({ mode, userId, personalityId: resolvedPersonalityId, title })
   return mapSession(session)
 }
 
-export async function listSessionMessages(sessionId) {
-  const messages = await getSessionMessages(sessionId)
+export async function listSessionMessages(sessionId, userId) {
+  if (!userId) {
+    const error = new Error("userId is required")
+    error.statusCode = 400
+    throw error
+  }
+
+  let targetSessionId = sessionId
+  if (!targetSessionId) {
+    // Fallback to latest user session only when a specific session id was not provided.
+    const userSession = await getUserSession(userId)
+    targetSessionId = userSession?.id ?? null
+  }
+
+  if (!targetSessionId) {
+    return []
+  }
+
+  const messages = await getSessionMessages(targetSessionId, userId)
   return messages.map(mapMessage)
 }
 
-export async function listRecentSessions(limit = 10) {
-  const sessions = await listSessions(limit)
+export async function listRecentSessions(userId, limit = 10) {
+  if (!userId) {
+    const error = new Error("userId is required")
+    error.statusCode = 400
+    throw error
+  }
+
+  const sessions = await listSessions(userId, limit)
 
   return sessions.map((session) => ({
     id: session.id,
     mode: session.mode,
+    title: session.title ?? null,
+    personalityId: session.personalityId ?? null,
+    personalityName: session.personality?.name ?? null,
     createdAt: session.createdAt.toISOString(),
     lastMessage: session.messages[0]
       ? {

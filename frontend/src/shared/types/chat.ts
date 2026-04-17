@@ -27,3 +27,22 @@ export interface ComparativeTurn {
   createdAt: string
   result: ComparativeResult
 }
+
+export interface DebateContribution {
+  personalityId: PersonalityId
+  personalityName: string
+  content: string
+}
+
+export interface DebateResult {
+  initialPositions: DebateContribution[]
+  reactions: DebateContribution[]
+  synthesis?: string | null
+}
+
+export interface DebateTurn {
+  id: string
+  prompt: string
+  createdAt: string
+  result: DebateResult
+}

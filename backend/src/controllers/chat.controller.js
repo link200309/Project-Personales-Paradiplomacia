@@ -5,7 +5,12 @@ import { fail, ok } from "../utils/responseHelpers.js"
 export async function chatIndividualController(req, res, next) {
   try {
     const { sessionId, personalityId, message } = req.body ?? {}
-    const result = await processIndividualChat({ sessionId, personalityId, message })
+    const result = await processIndividualChat({
+      sessionId,
+      personalityId,
+      message,
+      userId: req.currentUser.id,
+    })
     return ok(res, result)
   } catch (error) {
     if (error.statusCode) {
@@ -19,7 +24,12 @@ export async function chatIndividualController(req, res, next) {
 export async function chatComparativeController(req, res, next) {
   try {
     const { sessionId, message, personalityIds } = req.body ?? {}
-    const result = await processComparativeChat({ sessionId, message, personalityIds })
+    const result = await processComparativeChat({
+      sessionId,
+      message,
+      personalityIds,
+      userId: req.currentUser.id,
+    })
     return ok(res, result)
   } catch (error) {
     if (error.statusCode) {

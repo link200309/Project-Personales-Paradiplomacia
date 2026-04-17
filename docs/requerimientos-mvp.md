@@ -6,10 +6,11 @@ Definir los requerimientos funcionales y no funcionales mínimos que debe cubrir
 
 ## 2. Alcance del MVP
 
-El MVP debe cubrir dos modos principales de interacción:
+El MVP debe cubrir tres modos principales de interacción:
 
 - chat individual con una personalidad seleccionada,
 - análisis comparado con respuestas separadas de las tres personalidades.
+- debate estructurado o mesa redonda con posturas, réplicas y síntesis final.
 
 Este documento describe solo lo necesario para construir la primera versión funcional.
 
@@ -36,24 +37,30 @@ Este documento describe solo lo necesario para construir la primera versión fun
 - RF-11: El sistema debe presentar las respuestas de forma claramente diferenciada para facilitar la comparación.
 - RF-12: El sistema puede incluir una síntesis final opcional que resuma coincidencias y diferencias.
 
-### 3.4 Historial de sesión
+### 3.4 Debate estructurado
 
-- RF-13: El sistema debe guardar un historial básico de mensajes durante la sesión.
-- RF-14: El sistema debe mostrar la conversación previa de la sesión activa al usuario.
-- RF-15: El sistema debe asociar los mensajes al modo de interacción utilizado: individual o comparado.
+- RF-13: El usuario debe poder activar un modo debate con las tres personalidades.
+- RF-14: El sistema debe generar una postura inicial por personalidad, réplicas cruzadas y una síntesis final.
+- RF-15: El sistema debe conservar el debate dentro de una sesión reutilizable.
 
-### 3.5 Integración con backend y modelo
+### 3.5 Historial de sesión
 
-- RF-16: El frontend debe enviar al backend el mensaje del usuario, la personalidad seleccionada y el identificador de sesión cuando aplique.
-- RF-17: El backend debe construir el prompt final combinando instrucciones base, contexto reciente y mensaje del usuario.
-- RF-18: El backend debe invocar el servicio de modelo de lenguaje y devolver la respuesta normalizada.
-- RF-19: El sistema debe almacenar o reutilizar la información mínima necesaria para mantener la continuidad de la sesión.
+- RF-16: El sistema debe guardar un historial básico de mensajes durante la sesión.
+- RF-17: El sistema debe mostrar la conversación previa de la sesión activa al usuario.
+- RF-18: El sistema debe asociar los mensajes al modo de interacción utilizado: individual, comparado o debate.
 
-### 3.6 Salida de resultados
+### 3.6 Integración con backend y modelo
 
-- RF-20: El sistema debe mostrar respuestas legibles, breves y orientadas a consulta académica o institucional.
-- RF-21: El sistema debe distinguir visualmente las respuestas de cada personalidad en el modo comparado.
-- RF-22: El sistema debe manejar respuestas de error cuando falle la generación o la comunicación con el backend.
+- RF-19: El frontend debe enviar al backend el mensaje del usuario, la personalidad seleccionada y el identificador de sesión cuando aplique.
+- RF-20: El backend debe construir el prompt final combinando instrucciones base, contexto reciente y mensaje del usuario.
+- RF-21: El backend debe invocar el servicio de modelo de lenguaje y devolver la respuesta normalizada.
+- RF-22: El sistema debe almacenar o reutilizar la información mínima necesaria para mantener la continuidad de la sesión.
+
+### 3.7 Salida de resultados
+
+- RF-23: El sistema debe mostrar respuestas legibles, breves y orientadas a consulta académica o institucional.
+- RF-24: El sistema debe distinguir visualmente las respuestas de cada personalidad en el modo comparado y en el debate.
+- RF-25: El sistema debe manejar respuestas de error cuando falle la generación o la comunicación con el backend.
 
 ## 4. Requerimientos no funcionales
 
@@ -78,7 +85,7 @@ Este documento describe solo lo necesario para construir la primera versión fun
 ### 4.4 Escalabilidad
 
 - RNF-10: La arquitectura debe permitir incorporar nuevas personalidades sin reescribir el flujo principal.
-- RNF-11: El sistema debe poder evolucionar hacia un modo debate o mesa redonda en una fase posterior.
+- RNF-11: El sistema debe soportar un modo debate o mesa redonda sin reescribir el flujo principal.
 - RNF-12: La persistencia y el manejo de sesiones deben poder ampliarse sin cambiar la experiencia base del usuario.
 
 ### 4.5 Confiabilidad
@@ -108,13 +115,13 @@ Este documento describe solo lo necesario para construir la primera versión fun
 
 - El usuario puede conversar con una personalidad individual sin fricción.
 - El usuario puede solicitar un análisis comparado y recibir tres respuestas diferenciadas.
+- El usuario puede activar un debate estructurado y recibir posturas, réplicas y síntesis final.
 - El sistema conserva el contexto básico de la sesión activa.
 - La interfaz presenta la información de forma clara y entendible.
 - El backend puede orquestar prompts y respuestas sin exponer complejidad técnica al usuario.
 
 ## 6. Exclusiones del MVP
 
-- Debate multiagente con réplicas automáticas en varias rondas.
 - Panel administrativo completo con versionado avanzado.
 - Permisos complejos por roles múltiples.
 - Integraciones externas complejas.
