@@ -20,10 +20,6 @@ interface SendDebateParams {
   message: string
 }
 
-interface IndividualChatResponse {
-  response: ChatMessage
-}
-
 interface ComparativeChatResponse extends ComparativeResult {}
 
 interface DebateChatResponse extends DebateResult {}
@@ -179,20 +175,101 @@ export function useChat() {
 
     appendMessage(userMessage)
 
+    const streamingAssistantId = crypto.randomUUID()
+    const streamingAssistantMessage: ChatMessage = {
+      id: streamingAssistantId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      personalityId,
+    }
+
+    appendMessage(streamingAssistantMessage)
+
     try {
-      const result = await httpClient<IndividualChatResponse>("/chat/individual", {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001/api"
+      const userId = window.sessionStorage.getItem("paradiplomacy-user-id")
+
+      const response = await fetch(`${API_BASE_URL}/chat/individual/stream`, {
         method: "POST",
-        body: {
+        headers: {
+          "Content-Type": "application/json",
+          ...(userId ? { "x-user-id": userId } : {}),
+        },
+        body: JSON.stringify({
           sessionId,
           personalityId,
           message,
-        },
+        }),
       })
 
-      appendMessage(result.response)
+      if (!response.ok || !response.body) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.message ?? `Request failed with status ${response.status}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder("utf-8")
+      let buffer = ""
+      let completedMessage: ChatMessage | null = null
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) {
+          break
+        }
+
+        buffer += decoder.decode(value, { stream: true })
+        const chunks = buffer.split("\n\n")
+        buffer = chunks.pop() ?? ""
+
+        for (const chunk of chunks) {
+          const lines = chunk.split("\n")
+          const eventLine = lines.find((line) => line.startsWith("event:"))
+          const dataLine = lines.find((line) => line.startsWith("data:"))
+          if (!eventLine || !dataLine) {
+            continue
+          }
+
+          const eventType = eventLine.replace("event:", "").trim()
+          const rawData = dataLine.replace("data:", "").trim()
+          const data = JSON.parse(rawData)
+
+          if (eventType === "token") {
+            const token = String(data.token ?? "")
+            setMessages((current) =>
+              current.map((item) =>
+                item.id === streamingAssistantId
+                  ? {
+                      ...item,
+                      content: item.content + token,
+                    }
+                  : item
+              )
+            )
+            continue
+          }
+
+          if (eventType === "done") {
+            completedMessage = data.response as ChatMessage
+            setMessages((current) =>
+              current.map((item) => (item.id === streamingAssistantId ? completedMessage as ChatMessage : item))
+            )
+            continue
+          }
+
+          if (eventType === "error") {
+            throw new Error(data.message ?? "No se pudo obtener respuesta.")
+          }
+        }
+      }
+
+      if (!completedMessage) {
+        throw new Error("La respuesta en streaming no finalizo correctamente.")
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "No se pudo obtener respuesta.")
-      setMessages((current) => current.filter((item) => item.id !== userMessage.id))
+      setMessages((current) => current.filter((item) => item.id !== userMessage.id && item.id !== streamingAssistantId))
     }
   }
 
