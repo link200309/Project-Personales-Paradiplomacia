@@ -1,5 +1,5 @@
 import { getPersonalityById } from "./personalities.service.js"
-import { generateChatCompletion } from "./llm.service.js"
+import { generateChatCompletion, generateChatCompletionStream } from "./llm.service.js"
 import { addMessage, ensureSessionForUser, listSessionMessages } from "./sessions.service.js"
 import { updateSession } from "../repositories/sessions.repository.js"
 import { PERSONALITY_IDS } from "../utils/constants.js"
@@ -17,7 +17,7 @@ const PERSONALITY_FOCUS = {
 
 const PERSONALITY_VOICE = {
   economist: {
-    roleTitle: "economista territorial y de politica publica",
+    roleTitle: "economista territorial",
     tone: "tecnico, sobrio, concreto y centrado en variables economicas",
     requiredStructure:
       "Si la pregunta es analitica: mecanismo economico, efectos sobre recursos/incentivos, impacto esperado y recomendacion. Si la pregunta es simple: definicion breve + implicacion economica especifica + una advertencia metodologica si corresponde.",
@@ -203,6 +203,116 @@ export async function processIndividualChat({ sessionId, personalityId, message,
       contextSize: contextSlice.length,
     })
     console.error("LLM generation failed", {
+      sessionId: session.id,
+      personalityId,
+      error: error?.message,
+      code: error?.code,
+    })
+  }
+
+  const assistantMessage = {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: assistantContent,
+    createdAt: new Date().toISOString(),
+    personalityId: sessionPersonalityId,
+  }
+
+  const savedAssistantMessage = await addMessage(session.id, assistantMessage)
+
+  return {
+    sessionId: session.id,
+    response: savedAssistantMessage,
+    metadata: {
+      personalityId: sessionPersonalityId,
+      contextWindow: MAX_CONTEXT_MESSAGES,
+      contextUsed: contextSlice.length,
+      usedFallback,
+      model: providerModel,
+      personality: {
+        analysisFrame: personality.analysisFrame,
+        argumentStyle: personality.argumentStyle,
+      },
+    },
+  }
+}
+
+export async function processIndividualChatStream({ sessionId, personalityId, message, userId, onToken }) {
+  const normalizedMessage = String(message ?? "").trim()
+  if (!normalizedMessage) {
+    const error = new Error("Message is required")
+    error.statusCode = 400
+    throw error
+  }
+
+  const personality = await getPersonalityById(personalityId)
+  if (!personality) {
+    const error = new Error("Invalid personalityId")
+    error.statusCode = 400
+    throw error
+  }
+
+  const session = await ensureSessionForUser({ sessionId, mode: "individual", userId })
+
+  const sessionPersonalityId = session.personalityId ?? personalityId
+  if (!session.personalityId && sessionPersonalityId) {
+    await updateSession(session.id, {
+      personalityId: sessionPersonalityId,
+      title: personality.name,
+    })
+  }
+
+  const userMessage = {
+    id: crypto.randomUUID(),
+    role: "user",
+    content: normalizedMessage,
+    createdAt: new Date().toISOString(),
+  }
+
+  await addMessage(session.id, userMessage)
+
+  const history = await listSessionMessages(session.id, userId)
+  const { contextSlice, contextText } = buildContext(history)
+
+  const systemPrompt = buildSystemPrompt(personality)
+  const userPrompt = buildUserPrompt({
+    contextText,
+    userMessage: normalizedMessage,
+  })
+
+  let assistantContent = ""
+  let usedFallback = false
+  let providerModel = null
+
+  try {
+    const generation = await generateChatCompletionStream({
+      systemPrompt,
+      userPrompt,
+      maxTokens: 300,
+      temperature: 0.3,
+      onToken: (token) => {
+        assistantContent += token
+        if (typeof onToken === "function") {
+          onToken(token)
+        }
+      },
+    })
+
+    assistantContent = generation.content
+    providerModel = generation.model
+  } catch (error) {
+    usedFallback = true
+    assistantContent = buildIndividualResponse({
+      personality,
+      userMessage: normalizedMessage,
+      contextSize: contextSlice.length,
+    })
+
+    if (typeof onToken === "function") {
+      onToken(assistantContent)
+    }
+
+    console.error("LLM stream generation failed", {
       sessionId: session.id,
       personalityId,
       error: error?.message,
