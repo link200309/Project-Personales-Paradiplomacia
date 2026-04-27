@@ -304,13 +304,6 @@ export function ConversationPage() {
 
   return (
     <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
-      <AuthTopbar
-        activeMode={mode}
-        activeSessionId={activeSessionId}
-        onToggleSidebar={() => setSidebarOpen((current) => !current)}
-        onNewChat={() => setShowModeSelection(true)}
-      />
-
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
         <div
           className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"} fixed inset-y-0 left-0 z-50 w-[90%] max-w-xs overflow-y-auto border-r bg-background shadow-2xl transition-transform duration-200 lg:static lg:z-auto lg:h-full lg:w-64 lg:max-w-none lg:translate-x-0 lg:overflow-hidden lg:shadow-none`}
@@ -380,117 +373,123 @@ export function ConversationPage() {
           />
         ) : null}
 
-        <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-hidden px-4 py-4 sm:gap-4 sm:px-6 sm:py-6 lg:px-[8%] lg:py-6">
-          {mode === "individual" ? (
-            <Card className="border-border/70 bg-muted/30 shadow-sm">
-              <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                    Conversación actual
-                  </p>
-                  <p className="text-sm font-medium">
-                    {personalities.find(
-                      (personality) => personality.id === selectedPersonalityId,
-                    )?.name ?? "Personalidad"}
-                  </p>
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+          <AuthTopbar
+            activeMode={mode}
+            activeSessionId={activeSessionId}
+            onToggleSidebar={() => setSidebarOpen((current) => !current)}
+            onNewChat={() => setShowModeSelection(true)}
+          />
+
+          <div className="flex flex-1 min-h-0 flex-col gap-3 overflow-hidden px-4 py-4 sm:gap-4 sm:px-6 sm:py-6 lg:px-8 lg:py-6">
+            {mode === "individual" ? (
+              <Card className="border-border/70 bg-muted/30 shadow-sm">
+                <CardContent className="flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      Conversación actual
+                    </p>
+                    <p className="text-sm font-medium">
+                      {personalities.find(
+                        (personality) =>
+                          personality.id === selectedPersonalityId,
+                      )?.name ?? "Personalidad"}
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-border/70 bg-background px-3 py-1 text-xs text-muted-foreground">
+                    {sessionId
+                      ? `Sesión ${sessionId.slice(0, 10)}`
+                      : "Sin sesión aún"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {messages.length} mensajes en esta sesión
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <div
+              ref={contentScrollRef}
+              className="flex-1 min-h-0 overflow-y-auto pr-1"
+            >
+              {mode === "individual" ? (
+                <MessageList messages={messages} />
+              ) : mode === "comparative" ? (
+                <div className="grid gap-4">
+                  {comparativeHistory.length > 0 ? (
+                    comparativeHistory.map((turn) => (
+                      <div key={turn.id} className="grid gap-3">
+                        <Card className="border-primary/20 bg-primary/5">
+                          <CardHeader className="py-3 sm:py-4">
+                            <CardTitle className="text-sm sm:text-base">
+                              Tu consulta
+                            </CardTitle>
+                            <CardDescription>
+                              Pregunta enviada al análisis comparativo
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <p className="whitespace-pre-wrap text-xs leading-6 text-foreground/90 sm:text-sm">
+                              {turn.prompt}
+                            </p>
+                          </CardContent>
+                        </Card>
+                        <ComparisonPanel result={turn.result} />
+                      </div>
+                    ))
+                  ) : (
+                    <ComparisonPanel result={comparativeResult} />
+                  )}
                 </div>
-                <div className="rounded-full border border-border/70 bg-background px-3 py-1 text-xs text-muted-foreground">
-                  {sessionId
-                    ? `Sesión ${sessionId.slice(0, 10)}`
-                    : "Sin sesión aún"}
+              ) : (
+                <div className="grid gap-4">
+                  {debateHistory.length > 0 ? (
+                    debateHistory.map((turn) => (
+                      <div key={turn.id} className="grid gap-3">
+                        <Card className="border-primary/20 bg-primary/5">
+                          <CardHeader className="py-3 sm:py-4">
+                            <CardTitle className="text-sm sm:text-base">
+                              Tu consulta
+                            </CardTitle>
+                            <CardDescription>
+                              Pregunta enviada al debate estructurado
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <p className="whitespace-pre-wrap text-xs leading-6 text-foreground/90 sm:text-sm">
+                              {turn.prompt}
+                            </p>
+                          </CardContent>
+                        </Card>
+                        <DebatePanel result={turn.result} />
+                      </div>
+                    ))
+                  ) : (
+                    <DebatePanel result={debateResult} />
+                  )}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {mode === "comparative"
-                    ? `${comparativeHistory.length} turnos en esta sesión`
-                    : mode === "debate"
-                      ? `${debateHistory.length} debates en esta sesión`
-                      : `${messages.length} mensajes en esta sesión`}
-                </div>
+              )}
+            </div>
+
+            <Card className="sticky bottom-0 z-20 border bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
+              <CardContent>
+                <ChatComposer
+                  mode={mode}
+                  value={draft}
+                  loading={loading || loadingSession}
+                  onChange={setDraft}
+                  onSubmit={handleSubmit}
+                />
               </CardContent>
             </Card>
-          ) : null}
 
-          <div
-            ref={contentScrollRef}
-            className="flex-1 min-h-0 overflow-y-auto pr-1"
-          >
-            {mode === "individual" ? (
-              <MessageList messages={messages} />
-            ) : mode === "comparative" ? (
-              <div className="grid gap-4">
-                {comparativeHistory.length > 0 ? (
-                  comparativeHistory.map((turn) => (
-                    <div key={turn.id} className="grid gap-3">
-                      <Card className="border-primary/20 bg-primary/5">
-                        <CardHeader className="py-3 sm:py-4">
-                          <CardTitle className="text-sm sm:text-base">
-                            Tu consulta
-                          </CardTitle>
-                          <CardDescription>
-                            Pregunta enviada al análisis comparativo
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <p className="whitespace-pre-wrap text-xs leading-6 text-foreground/90 sm:text-sm">
-                            {turn.prompt}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <ComparisonPanel result={turn.result} />
-                    </div>
-                  ))
-                ) : (
-                  <ComparisonPanel result={comparativeResult} />
-                )}
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {debateHistory.length > 0 ? (
-                  debateHistory.map((turn) => (
-                    <div key={turn.id} className="grid gap-3">
-                      <Card className="border-primary/20 bg-primary/5">
-                        <CardHeader className="py-3 sm:py-4">
-                          <CardTitle className="text-sm sm:text-base">
-                            Tu consulta
-                          </CardTitle>
-                          <CardDescription>
-                            Pregunta enviada al debate estructurado
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <p className="whitespace-pre-wrap text-xs leading-6 text-foreground/90 sm:text-sm">
-                            {turn.prompt}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <DebatePanel result={turn.result} />
-                    </div>
-                  ))
-                ) : (
-                  <DebatePanel result={debateResult} />
-                )}
-              </div>
-            )}
+            {errorMessage ? (
+              <p className="text-sm text-destructive">{errorMessage}</p>
+            ) : null}
+            {sessionError ? (
+              <p className="text-sm text-destructive">{sessionError}</p>
+            ) : null}
           </div>
-
-          <Card className="sticky bottom-0 z-20 border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-            <CardContent>
-              <ChatComposer
-                mode={mode}
-                value={draft}
-                loading={loading || loadingSession}
-                onChange={setDraft}
-                onSubmit={handleSubmit}
-              />
-            </CardContent>
-          </Card>
-
-          {errorMessage ? (
-            <p className="text-sm text-destructive">{errorMessage}</p>
-          ) : null}
-          {sessionError ? (
-            <p className="text-sm text-destructive">{sessionError}</p>
-          ) : null}
         </div>
 
         <ModeSelectionModal

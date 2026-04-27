@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/shared/components/ui/button";
 import { Badge } from "@/shared/components/ui/badge";
@@ -20,25 +20,7 @@ interface AuthTopbarProps {
   onNewChat?: () => void;
 }
 
-function formatModeLabel(mode: InteractionMode) {
-  switch (mode) {
-    case "individual":
-      return "Individual";
-    case "comparative":
-      return "Comparativo";
-    case "debate":
-      return "Debate";
-    default:
-      return mode;
-  }
-}
-
-export function AuthTopbar({
-  activeMode,
-  activeSessionId,
-  onToggleSidebar,
-  onNewChat,
-}: AuthTopbarProps) {
+export function AuthTopbar({ onToggleSidebar, onNewChat }: AuthTopbarProps) {
   const { currentUser, isAuthenticated, login, signup, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
@@ -47,14 +29,6 @@ export function AuthTopbar({
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const sessionLabel = useMemo(() => {
-    if (!activeSessionId) {
-      return "Sin sesión activa";
-    }
-
-    return `${formatModeLabel(activeMode)} · ${activeSessionId.slice(0, 10)}`;
-  }, [activeMode, activeSessionId]);
 
   async function handleAuthSubmit() {
     try {
@@ -95,18 +69,53 @@ export function AuthTopbar({
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/95 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-3 px-3 py-3 sm:px-4 lg:px-6">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <p className="text-[0.68rem] font-medium uppercase tracking-[0.28em] text-muted-foreground">
-                Paradiplomacia IDEI
-              </p>
-              <h1 className="font-heading text-base font-semibold tracking-tight sm:text-xl">
-                Espacio de trabajo de política conversacional
-              </h1>
+        <div className="flex w-full flex-col gap-3 px-3 py-3 sm:px-5 lg:px-8">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <p className="text-[0.68rem] font-medium uppercase tracking-[0.28em] text-muted-foreground">
+                  Paradiplomacia IDEI
+                </p>
+                <h1 className="font-heading text-base font-semibold tracking-tight sm:text-xl">
+                  Espacio de trabajo de política conversacional
+                </h1>
+              </div>
+
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
+                <Badge
+                  variant="outline"
+                  className="rounded-full px-3 py-1 text-xs sm:text-sm"
+                >
+                  {isAuthenticated && currentUser
+                    ? `${currentUser.name} · ${currentUser.role}`
+                    : "Invitado"}
+                </Badge>
+
+                {isAuthenticated && currentUser ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleLogout}
+                    className="rounded-full px-4"
+                  >
+                    Cerrar sesión
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode("signin");
+                      setOpen(true);
+                    }}
+                    className="rounded-full px-4"
+                  >
+                    Iniciar sesión
+                  </Button>
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 lg:hidden">
+            <div className="flex items-center justify-end gap-2 lg:hidden">
               <button
                 type="button"
                 onClick={onNewChat}
@@ -137,50 +146,11 @@ export function AuthTopbar({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="secondary"
-              className="rounded-full px-2.5 py-0.5 text-[0.7rem]"
-            >
-              {sessionLabel}
-            </Badge>
+          <div className="grid gap-2 lg:grid-cols-[auto,1fr] lg:items-center">
             <p className="max-w-3xl text-xs leading-5 text-muted-foreground sm:text-sm">
               Consulta paradiplomacia con perfiles disciplinares, historial
               persistente, análisis comparado y debate estructurado.
             </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <Badge
-              variant="outline"
-              className="rounded-full px-3 py-1 text-xs sm:text-sm"
-            >
-              {isAuthenticated && currentUser
-                ? `${currentUser.name} · ${currentUser.role}`
-                : "Invitado"}
-            </Badge>
-
-            {isAuthenticated && currentUser ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleLogout}
-                className="rounded-full px-4"
-              >
-                Cerrar sesión
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => {
-                  setAuthMode("signin");
-                  setOpen(true);
-                }}
-                className="rounded-full px-4"
-              >
-                Iniciar sesión
-              </Button>
-            )}
           </div>
         </div>
       </header>
