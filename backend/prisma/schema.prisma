@@ -51,6 +51,7 @@ model Session {
   userId        String
   personalityId String?
   title         String?
+  groupId       String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   mode          InteractionMode
@@ -61,6 +62,7 @@ model Session {
   @@index([userId, createdAt])
   @@index([personalityId])
   @@index([createdAt])
+  @@index([groupId])
 }
 
 model Message {
@@ -69,11 +71,14 @@ model Message {
   role          String
   personalityId String?
   content       String
+  groupId       String?
+  messageId     String?
   metadata      Json?
   createdAt     DateTime @default(now())
   session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
+  @@index([groupId])
 }
 
 model Personality {
@@ -148,4 +153,13 @@ model AuditLog {
 
   @@index([entityType, entityId, createdAt])
   @@index([actorUserId, createdAt])
+}
+
+model WhatsAppGroup {
+  id               String   @id @default(cuid())
+  whatsappGroupId String   @unique
+  name             String
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
