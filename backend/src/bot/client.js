@@ -2,6 +2,7 @@ import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "baileys"
 import { existsSync, mkdirSync } from "fs"
 import { dirname } from "path"
 import { fileURLToPath } from "url"
+import QRCode from "qrcode"
 
 import { handleIncomingMessage } from "./handlers/message.handler.js"
 
@@ -15,6 +16,7 @@ export let connectionState = {
   isConnected: false,
   isConnecting: false,
   qr: null,
+  qrDataURL: null,
   lastError: null,
 }
 
@@ -45,14 +47,6 @@ export async function initBot() {
     sock = makeWASocket({
       auth: state,
       printQRInTerminal: true,
-      logger: {
-        level: "info",
-        info: (msg) => console.log("[Baileys]", msg),
-        warn: (msg) => console.warn("[Baileys WARN]", msg),
-        error: (msg) => console.error("[Baileys ERROR]", msg),
-        debug: (msg) => console.debug("[Baileys DEBUG]", msg),
-      },
-      browser: ["Paradiplomacia Bot", "Chrome", "120"],
     })
 
     sock.ev.on("creds.update", saveCreds)
@@ -62,7 +56,8 @@ export async function initBot() {
 
       if (qr) {
         connectionState.qr = qr
-        console.log("[Baileys] QR Code received - escanea con WhatsApp")
+        generateQRDataURL(qr)
+        console.log("[Baileys] QR Code recibido - visita http://localhost:3001/qr para escanear")
       }
 
       if (connection === "close") {
@@ -116,8 +111,29 @@ export function getConnectionStatus() {
     isConnected: connectionState.isConnected,
     isConnecting: connectionState.isConnecting,
     qr: connectionState.qr,
+    qrDataURL: connectionState.qrDataURL,
     lastError: connectionState.lastError,
   }
+}
+
+async function generateQRDataURL(qrCode) {
+  try {
+    const dataURL = await QRCode.toDataURL(qrCode, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: "#000000",
+        light: "#FFFFFF",
+      },
+    })
+    connectionState.qrDataURL = dataURL
+  } catch (error) {
+    console.error("[Baileys] Error al generar QR:", error)
+  }
+}
+
+export function getQRDataURL() {
+  return connectionState.qrDataURL
 }
 
 export async function disconnectBot() {
