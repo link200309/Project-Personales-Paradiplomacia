@@ -1,10 +1,17 @@
-import { getPersonalityById } from "./personalities.service.js"
-import { generateChatCompletion, generateChatCompletionStream } from "./llm.service.js"
-import { addMessage, ensureSessionForUser, listSessionMessages } from "./sessions.service.js"
-import { updateSession } from "../repositories/sessions.repository.js"
-import { PERSONALITY_IDS } from "../utils/constants.js"
+import { getPersonalityById } from "./personalities.service.js";
+import {
+  generateChatCompletion,
+  generateChatCompletionStream,
+} from "./llm.service.js";
+import {
+  addMessage,
+  ensureSessionForUser,
+  listSessionMessages,
+} from "./sessions.service.js";
+import { updateSession } from "../repositories/sessions.repository.js";
+import { PERSONALITY_IDS } from "../utils/constants.js";
 
-const MAX_CONTEXT_MESSAGES = 6
+const MAX_CONTEXT_MESSAGES = 6;
 
 const PERSONALITY_FOCUS = {
   economist:
@@ -13,7 +20,7 @@ const PERSONALITY_FOCUS = {
     "Enfatiza viabilidad politico-institucional: actores, incentivos, gobernanza y riesgos de implementacion.",
   jurist:
     "Enfatiza legalidad y seguridad juridica: competencias, marco normativo, riesgos regulatorios y cautelas procedimentales.",
-}
+};
 
 const PERSONALITY_VOICE = {
   economist: {
@@ -29,58 +36,67 @@ const PERSONALITY_VOICE = {
     tone: "estrategico, institucional y pragmatico",
     requiredStructure:
       "Si la pregunta es analitica: mapa de actores, riesgos de gobernabilidad, ruta de implementacion. Si la pregunta es simple: definicion breve + implicacion politica clave.",
-    avoid:
-      "evita respuestas abstractas sin actores, incentivos o viabilidad",
+    avoid: "evita respuestas abstractas sin actores, incentivos o viabilidad",
   },
   jurist: {
     roleTitle: "jurista senior en derecho publico e internacional",
     tone: "preciso, normativo y preventivo",
     requiredStructure:
       "Si la pregunta es analitica: marco normativo, riesgos legales, recomendacion de cumplimiento. Si la pregunta es simple: definicion breve + implicacion juridica clave.",
-    avoid:
-      "evita afirmaciones legales absolutas sin cautelas o condiciones",
-},
-  }
-}
+    avoid: "evita afirmaciones legales absolutas sin cautelas o condiciones",
+  },
+};
 
-export async function processWhatsAppChat({ sessionId, personalityId, message, groupId, messageId, userId }) {
-  const normalizedMessage = String(message ?? "").trim()
+export async function processWhatsAppChat({
+  sessionId,
+  personalityId,
+  message,
+  groupId,
+  messageId,
+  userId,
+}) {
+  const normalizedMessage = String(message ?? "").trim();
   if (!normalizedMessage) {
-    const error = new Error("Message is required")
-    error.statusCode = 400
-    throw error
+    const error = new Error("Message is required");
+    error.statusCode = 400;
+    throw error;
   }
 
-  const personality = await getPersonalityById(personalityId)
+  const personality = await getPersonalityById(personalityId);
   if (!personality) {
-    const error = new Error("Invalid personalityId")
-    error.statusCode = 400
-    throw error
+    const error = new Error("Invalid personalityId");
+    error.statusCode = 400;
+    throw error;
   }
 
-  const session = await ensureSessionForUser({ sessionId, mode: "individual", userId, groupId })
+  const session = await ensureSessionForUser({
+    sessionId,
+    mode: "individual",
+    userId,
+    groupId,
+  });
 
   const userMessage = {
     id: crypto.randomUUID(),
     role: "user",
     content: normalizedMessage,
     createdAt: new Date().toISOString(),
-  }
+  };
 
-  await addMessage(session.id, userMessage, groupId, messageId)
+  await addMessage(session.id, userMessage, groupId, messageId);
 
-  const history = await listSessionMessages(session.id, userId)
-  const { contextSlice, contextText } = buildContext(history)
+  const history = await listSessionMessages(session.id, userId);
+  const { contextSlice, contextText } = buildContext(history);
 
-  const systemPrompt = buildSystemPrompt(personality)
+  const systemPrompt = buildSystemPrompt(personality);
   const userPrompt = buildUserPrompt({
     contextText,
     userMessage: normalizedMessage,
-  })
+  });
 
-  let assistantContent
-  let usedFallback = false
-  let providerModel = null
+  let assistantContent;
+  let usedFallback = false;
+  let providerModel = null;
 
   try {
     const generation = await generateChatCompletion({
@@ -88,21 +104,21 @@ export async function processWhatsAppChat({ sessionId, personalityId, message, g
       userPrompt,
       maxTokens: 300,
       temperature: 0.3,
-    })
-    assistantContent = generation.content
-    providerModel = generation.model
+    });
+    assistantContent = generation.content;
+    providerModel = generation.model;
   } catch (error) {
-    usedFallback = true
+    usedFallback = true;
     assistantContent = buildIndividualResponse({
       personality,
       userMessage: normalizedMessage,
       contextSize: contextSlice.length,
-    })
+    });
     console.error("LLM generation failed for WhatsApp", {
       sessionId: session.id,
       personalityId,
       error: error?.message,
-    })
+    });
   }
 
   const assistantMessage = {
@@ -111,9 +127,9 @@ export async function processWhatsAppChat({ sessionId, personalityId, message, g
     content: assistantContent,
     createdAt: new Date().toISOString(),
     personalityId: sessionPersonalityId,
-  }
+  };
 
-  await addMessage(session.id, assistantMessage, groupId, messageId)
+  await addMessage(session.id, assistantMessage, groupId, messageId);
 
   return {
     sessionId: session.id,
@@ -125,22 +141,25 @@ export async function processWhatsAppChat({ sessionId, personalityId, message, g
       usedFallback,
       model: providerModel,
     },
-  }
-}
+  };
 }
 
 function buildIndividualResponse({ personality, userMessage, contextSize }) {
-  return `No fue posible generar respuesta del modelo en este momento.\n\nConsulta recibida: "${userMessage}"\nPersonalidad: ${personality.name}\nContexto considerado: ${contextSize} mensajes recientes.\n\nPuedes reintentar en unos segundos.`
+  return `No fue posible generar respuesta del modelo en este momento.\n\nConsulta recibida: "${userMessage}"\nPersonalidad: ${personality.name}\nContexto considerado: ${contextSize} mensajes recientes.\n\nPuedes reintentar en unos segundos.`;
 }
 
 function buildSystemPrompt(personality) {
-  const limits = Array.isArray(personality.thematicLimits) ? personality.thematicLimits : []
-  const focusInstruction = PERSONALITY_FOCUS[personality.id] ?? "Mantener enfoque tecnico segun la personalidad."
-  const voiceProfile = PERSONALITY_VOICE[personality.id]
+  const limits = Array.isArray(personality.thematicLimits)
+    ? personality.thematicLimits
+    : [];
+  const focusInstruction =
+    PERSONALITY_FOCUS[personality.id] ??
+    "Mantener enfoque tecnico segun la personalidad.";
+  const voiceProfile = PERSONALITY_VOICE[personality.id];
   const economistAddendum =
     personality.id === PERSONALITY_IDS.ECONOMIST
       ? "Para la personalidad Economista, cada respuesta debe sonar como economia aplicada: usa conceptos como incentivos, costo de oportunidad, asignacion de recursos, productividad, inversion, externalidades, eficiencia y sostenibilidad fiscal cuando sea pertinente. Evita definiciones vacias o demasiado generales."
-      : ""
+      : "";
 
   return [
     `Eres ${personality.name}.`,
@@ -150,7 +169,9 @@ function buildSystemPrompt(personality) {
     voiceProfile ? `Tono requerido: ${voiceProfile.tone}.` : "",
     `Marco de analisis: ${personality.analysisFrame}`,
     `Tipo de argumentos: ${personality.argumentStyle}`,
-    voiceProfile ? `Estructura requerida: ${voiceProfile.requiredStructure}` : "",
+    voiceProfile
+      ? `Estructura requerida: ${voiceProfile.requiredStructure}`
+      : "",
     voiceProfile ? `Evitar: ${voiceProfile.avoid}.` : "",
     `Instrucciones base: ${personality.baseInstructions}`,
     `Enfoque obligatorio: ${focusInstruction}`,
@@ -163,7 +184,7 @@ function buildSystemPrompt(personality) {
     limits.length > 0 ? `Limites tematicos: ${limits.join("; ")}` : "",
   ]
     .filter(Boolean)
-    .join("\n")
+    .join("\n");
 }
 
 function buildResponseGuidelines(userMessage) {
@@ -193,12 +214,12 @@ function buildResponseGuidelines(userMessage) {
     "   - Estructura: idea central, análisis, recomendación",
     "   - Objetivo: 180-260 palabras",
     "   - Formato: ## Idea central / [1 párrafo] / ## Análisis / [2-4 bullets] / ## Recomendación / [2-4 bullets]",
-  ].join("\n")
+  ].join("\n");
 }
 
 function buildUserPrompt({ contextText, userMessage }) {
-  const contextBlock = contextText || "SIN CONTEXTO PREVIO"
-  const guidelines = buildResponseGuidelines(userMessage)
+  const contextBlock = contextText || "SIN CONTEXTO PREVIO";
+  const guidelines = buildResponseGuidelines(userMessage);
 
   return [
     "Contexto reciente de la sesion:",
@@ -208,32 +229,41 @@ function buildUserPrompt({ contextText, userMessage }) {
     userMessage,
     "",
     guidelines,
-  ].join("\n")
+  ].join("\n");
 }
 
-export async function processIndividualChat({ sessionId, personalityId, message, userId }) {
-  const normalizedMessage = String(message ?? "").trim()
+export async function processIndividualChat({
+  sessionId,
+  personalityId,
+  message,
+  userId,
+}) {
+  const normalizedMessage = String(message ?? "").trim();
   if (!normalizedMessage) {
-    const error = new Error("Message is required")
-    error.statusCode = 400
-    throw error
+    const error = new Error("Message is required");
+    error.statusCode = 400;
+    throw error;
   }
 
-  const personality = await getPersonalityById(personalityId)
+  const personality = await getPersonalityById(personalityId);
   if (!personality) {
-    const error = new Error("Invalid personalityId")
-    error.statusCode = 400
-    throw error
+    const error = new Error("Invalid personalityId");
+    error.statusCode = 400;
+    throw error;
   }
 
-  const session = await ensureSessionForUser({ sessionId, mode: "individual", userId })
+  const session = await ensureSessionForUser({
+    sessionId,
+    mode: "individual",
+    userId,
+  });
 
-  const sessionPersonalityId = session.personalityId ?? personalityId
+  const sessionPersonalityId = session.personalityId ?? personalityId;
   if (!session.personalityId && sessionPersonalityId) {
     await updateSession(session.id, {
       personalityId: sessionPersonalityId,
       title: personality.name,
-    })
+    });
   }
 
   const userMessage = {
@@ -241,22 +271,22 @@ export async function processIndividualChat({ sessionId, personalityId, message,
     role: "user",
     content: normalizedMessage,
     createdAt: new Date().toISOString(),
-  }
+  };
 
-  await addMessage(session.id, userMessage)
+  await addMessage(session.id, userMessage);
 
-  const history = await listSessionMessages(session.id, userId)
-  const { contextSlice, contextText } = buildContext(history)
+  const history = await listSessionMessages(session.id, userId);
+  const { contextSlice, contextText } = buildContext(history);
 
-  const systemPrompt = buildSystemPrompt(personality)
+  const systemPrompt = buildSystemPrompt(personality);
   const userPrompt = buildUserPrompt({
     contextText,
     userMessage: normalizedMessage,
-  })
+  });
 
-  let assistantContent
-  let usedFallback = false
-  let providerModel = null
+  let assistantContent;
+  let usedFallback = false;
+  let providerModel = null;
 
   try {
     const generation = await generateChatCompletion({
@@ -264,22 +294,22 @@ export async function processIndividualChat({ sessionId, personalityId, message,
       userPrompt,
       maxTokens: 300,
       temperature: 0.3,
-    })
-    assistantContent = generation.content
-    providerModel = generation.model
+    });
+    assistantContent = generation.content;
+    providerModel = generation.model;
   } catch (error) {
-    usedFallback = true
+    usedFallback = true;
     assistantContent = buildIndividualResponse({
       personality,
       userMessage: normalizedMessage,
       contextSize: contextSlice.length,
-    })
+    });
     console.error("LLM generation failed", {
       sessionId: session.id,
       personalityId,
       error: error?.message,
       code: error?.code,
-    })
+    });
   }
 
   const assistantMessage = {
@@ -288,9 +318,9 @@ export async function processIndividualChat({ sessionId, personalityId, message,
     content: assistantContent,
     createdAt: new Date().toISOString(),
     personalityId: sessionPersonalityId,
-  }
+  };
 
-  const savedAssistantMessage = await addMessage(session.id, assistantMessage)
+  const savedAssistantMessage = await addMessage(session.id, assistantMessage);
 
   return {
     sessionId: session.id,
@@ -306,32 +336,42 @@ export async function processIndividualChat({ sessionId, personalityId, message,
         argumentStyle: personality.argumentStyle,
       },
     },
-  }
+  };
 }
 
-export async function processIndividualChatStream({ sessionId, personalityId, message, userId, onToken }) {
-  const normalizedMessage = String(message ?? "").trim()
+export async function processIndividualChatStream({
+  sessionId,
+  personalityId,
+  message,
+  userId,
+  onToken,
+}) {
+  const normalizedMessage = String(message ?? "").trim();
   if (!normalizedMessage) {
-    const error = new Error("Message is required")
-    error.statusCode = 400
-    throw error
+    const error = new Error("Message is required");
+    error.statusCode = 400;
+    throw error;
   }
 
-  const personality = await getPersonalityById(personalityId)
+  const personality = await getPersonalityById(personalityId);
   if (!personality) {
-    const error = new Error("Invalid personalityId")
-    error.statusCode = 400
-    throw error
+    const error = new Error("Invalid personalityId");
+    error.statusCode = 400;
+    throw error;
   }
 
-  const session = await ensureSessionForUser({ sessionId, mode: "individual", userId })
+  const session = await ensureSessionForUser({
+    sessionId,
+    mode: "individual",
+    userId,
+  });
 
-  const sessionPersonalityId = session.personalityId ?? personalityId
+  const sessionPersonalityId = session.personalityId ?? personalityId;
   if (!session.personalityId && sessionPersonalityId) {
     await updateSession(session.id, {
       personalityId: sessionPersonalityId,
       title: personality.name,
-    })
+    });
   }
 
   const userMessage = {
@@ -339,22 +379,22 @@ export async function processIndividualChatStream({ sessionId, personalityId, me
     role: "user",
     content: normalizedMessage,
     createdAt: new Date().toISOString(),
-  }
+  };
 
-  await addMessage(session.id, userMessage)
+  await addMessage(session.id, userMessage);
 
-  const history = await listSessionMessages(session.id, userId)
-  const { contextSlice, contextText } = buildContext(history)
+  const history = await listSessionMessages(session.id, userId);
+  const { contextSlice, contextText } = buildContext(history);
 
-  const systemPrompt = buildSystemPrompt(personality)
+  const systemPrompt = buildSystemPrompt(personality);
   const userPrompt = buildUserPrompt({
     contextText,
     userMessage: normalizedMessage,
-  })
+  });
 
-  let assistantContent = ""
-  let usedFallback = false
-  let providerModel = null
+  let assistantContent = "";
+  let usedFallback = false;
+  let providerModel = null;
 
   try {
     const generation = await generateChatCompletionStream({
@@ -363,25 +403,25 @@ export async function processIndividualChatStream({ sessionId, personalityId, me
       maxTokens: 300,
       temperature: 0.3,
       onToken: (token) => {
-        assistantContent += token
+        assistantContent += token;
         if (typeof onToken === "function") {
-          onToken(token)
+          onToken(token);
         }
       },
-    })
+    });
 
-    assistantContent = generation.content
-    providerModel = generation.model
+    assistantContent = generation.content;
+    providerModel = generation.model;
   } catch (error) {
-    usedFallback = true
+    usedFallback = true;
     assistantContent = buildIndividualResponse({
       personality,
       userMessage: normalizedMessage,
       contextSize: contextSlice.length,
-    })
+    });
 
     if (typeof onToken === "function") {
-      onToken(assistantContent)
+      onToken(assistantContent);
     }
 
     console.error("LLM stream generation failed", {
@@ -389,7 +429,7 @@ export async function processIndividualChatStream({ sessionId, personalityId, me
       personalityId,
       error: error?.message,
       code: error?.code,
-    })
+    });
   }
 
   const assistantMessage = {
@@ -398,9 +438,9 @@ export async function processIndividualChatStream({ sessionId, personalityId, me
     content: assistantContent,
     createdAt: new Date().toISOString(),
     personalityId: sessionPersonalityId,
-  }
+  };
 
-  const savedAssistantMessage = await addMessage(session.id, assistantMessage)
+  const savedAssistantMessage = await addMessage(session.id, assistantMessage);
 
   return {
     sessionId: session.id,
@@ -416,5 +456,5 @@ export async function processIndividualChatStream({ sessionId, personalityId, me
         argumentStyle: personality.argumentStyle,
       },
     },
-  }
+  };
 }
