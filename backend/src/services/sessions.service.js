@@ -27,7 +27,7 @@ export async function ensureSession(sessionId, mode = "individual") {
   return ensureSessionForUser({ sessionId, mode, userId: null })
 }
 
-export async function ensureSessionForUser({ sessionId, mode = "individual", userId }) {
+export async function ensureSessionForUser({ sessionId, mode = "individual", userId, groupId = null }) {
   if (!userId) {
     const error = new Error("userId is required")
     error.statusCode = 400
@@ -35,7 +35,7 @@ export async function ensureSessionForUser({ sessionId, mode = "individual", use
   }
 
   if (!sessionId) {
-    const created = await createSession({ mode, userId })
+    const created = await createSession({ mode, userId, groupId })
     return mapSession(created)
   }
 
@@ -44,7 +44,7 @@ export async function ensureSessionForUser({ sessionId, mode = "individual", use
     return mapSession(existing)
   }
 
-  const created = await createSession({ mode, userId, forcedId: sessionId })
+  const created = await createSession({ mode, userId, forcedId: sessionId, groupId })
   return mapSession(created)
 }
 
@@ -119,7 +119,7 @@ export async function listRecentSessions(userId, limit = 10) {
   }))
 }
 
-export async function addMessage(sessionId, message) {
-  const created = await appendSessionMessage(sessionId, message)
+export async function addMessage(sessionId, message, groupId = null, messageId = null) {
+  const created = await appendSessionMessage(sessionId, message, groupId, messageId)
   return mapMessage(created)
 }

@@ -1,6 +1,6 @@
 import { prisma } from "../config/prisma.js"
 
-export async function createSession({ mode = "individual", userId, personalityId = null, title = null, forcedId }) {
+export async function createSession({ mode = "individual", userId, personalityId = null, title = null, forcedId, groupId = null }) {
   const sessionId = forcedId ?? `session-${crypto.randomUUID()}`
   const existingById = await prisma.session.findUnique({ where: { id: sessionId } })
 
@@ -28,6 +28,7 @@ export async function createSession({ mode = "individual", userId, personalityId
       userId,
       personalityId,
       title,
+      groupId,
     },
   })
 }
@@ -88,7 +89,7 @@ export function updateSession(sessionId, data) {
   })
 }
 
-export function appendSessionMessage(sessionId, message) {
+export function appendSessionMessage(sessionId, message, groupId = null, messageId = null) {
   return prisma.message.create({
     data: {
       id: message.id,
@@ -96,6 +97,8 @@ export function appendSessionMessage(sessionId, message) {
       role: message.role,
       content: message.content,
       personalityId: message.personalityId ?? null,
+      groupId,
+      messageId,
       createdAt: message.createdAt ? new Date(message.createdAt) : undefined,
     },
   })

@@ -39,22 +39,94 @@ const PERSONALITY_VOICE = {
       "Si la pregunta es analitica: marco normativo, riesgos legales, recomendacion de cumplimiento. Si la pregunta es simple: definicion breve + implicacion juridica clave.",
     avoid:
       "evita afirmaciones legales absolutas sin cautelas o condiciones",
-  },
+},
+  }
 }
 
-function buildContext(messages) {
-  const contextSlice = messages.slice(-MAX_CONTEXT_MESSAGES)
-  const contextText = contextSlice
-    .map((message) => {
-      const speaker = message.role === "assistant" ? `${message.role} (${message.personalityId ?? "general"})` : message.role
-      return `${speaker.toUpperCase()}: ${message.content}`
+export async function processWhatsAppChat({ sessionId, personalityId, message, groupId, messageId, userId }) {
+  const normalizedMessage = String(message ?? "").trim()
+  if (!normalizedMessage) {
+    const error = new Error("Message is required")
+    error.statusCode = 400
+    throw error
+  }
+
+  const personality = await getPersonalityById(personalityId)
+  if (!personality) {
+    const error = new Error("Invalid personalityId")
+    error.statusCode = 400
+    throw error
+  }
+
+  const session = await ensureSessionForUser({ sessionId, mode: "individual", userId, groupId })
+
+  const userMessage = {
+    id: crypto.randomUUID(),
+    role: "user",
+    content: normalizedMessage,
+    createdAt: new Date().toISOString(),
+  }
+
+  await addMessage(session.id, userMessage, groupId, messageId)
+
+  const history = await listSessionMessages(session.id, userId)
+  const { contextSlice, contextText } = buildContext(history)
+
+  const systemPrompt = buildSystemPrompt(personality)
+  const userPrompt = buildUserPrompt({
+    contextText,
+    userMessage: normalizedMessage,
+  })
+
+  let assistantContent
+  let usedFallback = false
+  let providerModel = null
+
+  try {
+    const generation = await generateChatCompletion({
+      systemPrompt,
+      userPrompt,
+      maxTokens: 300,
+      temperature: 0.3,
     })
-    .join("\n")
+    assistantContent = generation.content
+    providerModel = generation.model
+  } catch (error) {
+    usedFallback = true
+    assistantContent = buildIndividualResponse({
+      personality,
+      userMessage: normalizedMessage,
+      contextSize: contextSlice.length,
+    })
+    console.error("LLM generation failed for WhatsApp", {
+      sessionId: session.id,
+      personalityId,
+      error: error?.message,
+    })
+  }
+
+  const assistantMessage = {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: assistantContent,
+    createdAt: new Date().toISOString(),
+    personalityId: sessionPersonalityId,
+  }
+
+  await addMessage(session.id, assistantMessage, groupId, messageId)
 
   return {
-    contextSlice,
-    contextText,
+    sessionId: session.id,
+    response: assistantMessage,
+    metadata: {
+      personalityId: sessionPersonalityId,
+      groupId,
+      messageId,
+      usedFallback,
+      model: providerModel,
+    },
   }
+}
 }
 
 function buildIndividualResponse({ personality, userMessage, contextSize }) {
