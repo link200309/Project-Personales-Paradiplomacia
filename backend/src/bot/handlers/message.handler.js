@@ -57,7 +57,7 @@ export async function handleIncomingMessage(message) {
     }
 
     if (responseText) {
-      await sendResponse(chatJid, responseText, messageId)
+      await sendResponse(chatJid, responseText)
     }
   } catch (error) {
     console.error("[Bot] Error al procesar mensaje:", error)
@@ -159,18 +159,14 @@ function formatResponse(content) {
   return content
 }
 
-async function sendResponse(groupJid, text, quotedMessageId) {
+async function sendResponse(groupJid, text) {
   if (!sock) {
     console.error("[Bot] Socket no inicializado")
     return
   }
 
   try {
-    await sock.sendMessage(groupJid, {
-      text,
-    }, {
-      quoted: quotedMessageId,
-    })
+    await sock.sendMessage(groupJid, { text })
     console.log("[Bot] Respuesta enviada")
   } catch (error) {
     console.error("[Bot] Error al enviar respuesta:", error)
