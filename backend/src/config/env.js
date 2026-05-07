@@ -8,4 +8,5 @@ export const env = {
   LLM_TIMEOUT_MS: Number(process.env.LLM_TIMEOUT_MS ?? 20000),
   DEFAULT_USER_EMAIL: process.env.DEFAULT_USER_EMAIL ?? "admin@idei.local",
   DEFAULT_USER_NAME: process.env.DEFAULT_USER_NAME ?? "Admin IDEI",
+  BOT_GROUP_JID: process.env.BOT_GROUP_JID ?? "",
 }
