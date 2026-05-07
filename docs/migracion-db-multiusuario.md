@@ -1,11 +1,11 @@
-# Migracion DB Multiusuario - Paradiplomacia IDEI
+# Migracion DB Multiusuario - Paradiplomacia IDEI (WhatsApp Bot)
 
 Este documento describe como aplicar la nueva base de datos para soportar:
 
-- gestion de usuarios,
+- gestion de usuarios (estudiantes del grupo),
 - sesiones por usuario,
 - personalidades versionadas,
-- documentos institucionales,
+- mensajes del grupo de WhatsApp,
 - trazabilidad base (auditoria).
 
 ## 1. Variables de entorno
@@ -45,15 +45,14 @@ El seed ahora crea/actualiza:
 - personalidades base,
 - version inicial de personalidades.
 
-## 4. Identidad de usuario en requests
+## 4. Identidad de usuario en WhatsApp
 
-El backend resuelve usuario por headers opcionales:
+El sistema resuelve el estudiante por número de teléfono:
 
-- x-user-id
-- x-user-email
-- x-user-name
+- phoneNumber del mensaje de WhatsApp
+- Nombre del contacto (si está disponible)
 
-Si no llegan, usa el usuario por defecto configurado en entorno.
+El backend mapea el número de teléfono a un usuario en la base de datos.
 
 ## 5. Endpoints nuevos de gestion
 
@@ -69,9 +68,13 @@ Si no llegan, usa el usuario por defecto configurado en entorno.
 - PATCH /api/personalities/:id
 - PATCH /api/personalities/:id/toggle
 
-## 6. Compatibilidad con frontend actual
+## 6. Modelo de WhatsApp
 
-El frontend sigue funcionando sin login formal:
+El sistema también almacena:
 
-- si no configura identidad, opera como usuario por defecto,
-- puede fijar identidad en sessionStorage para pruebas multiusuario.
+- Group: grupos de WhatsApp where opera el bot
+- Message: mensajes del grupo con metadata de WhatsApp (messageId, groupId, sender)
+
+## 7. Compatibilidad con el bot
+
+El bot funciona con el usuario default para estudiantes sin registro.

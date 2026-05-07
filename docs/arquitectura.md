@@ -1,53 +1,46 @@
-# Arquitectura MVP - Proyecto Paradiplomacia
+# Arquitectura MVP - Proyecto Paradiplomacia (WhatsApp Bot)
 
 ## 1. Objetivo arquitectónico del MVP
 
-Definir una arquitectura simple, modular y escalable para soportar dos capacidades iniciales:
+Definir una arquitectura simple, modular y escalable para soportar un asistente de IA en un grupo de WhatsApp, con tres personalidades expertas que respondan a preguntas de estudiantes de paradiplomacia.
 
-- chat individual con una personalidad experta,
-- análisis comparado con tres personalidades (Economista, Politest y Jurista).
-
-La prioridad de esta fase es rapidez de implementación, claridad técnica y facilidad de evolución hacia una versión multiagente más avanzada.
+La prioridad de esta fase es rapidez de implementación, claridad técnica y facilidad de evolución hacia una versión más avanzada con más funcionalidades.
 
 ## 2. Vista general de arquitectura
 
 Arquitectura tipo cliente-servidor con separación por capas:
 
-- Frontend web (React + Vite + TypeScript + shadcn/ui): interfaz conversacional.
+- Backend Bot (Node.js + Express + Baileys): conexión a WhatsApp, manejo de mensajes y grupos.
 - Backend API (Node.js + Express en JavaScript): orquestación de prompts, sesión y respuestas.
 - Servicio LLM: generación de contenido para cada personalidad usando `llama-3.3-70b-versatile`.
-- Almacenamiento ligero: sesiones, mensajes y configuración de personalidades.
+- Almacenamiento ligero: sesiones, mensajes, grupos y configuración de personalidades.
 
-La estructura del proyecto puede organizarse como una base monolítica modular, con dos aplicaciones separadas en `frontend/` y `backend/`, y una carpeta `docs/` para la documentación funcional y técnica.
+La estructura del proyecto puede organizarse como una base monolítica modular, con dos aplicaciones separadas en `backend/` (bot + API) y una carpeta `docs/` para la documentación funcional y técnica.
 
 ## 3. Componentes principales
 
-## 3.1 Frontend (MVP)
+## 3.1 Bot de WhatsApp (MVP)
 
 Responsabilidades:
 
-- Selección de modo: chat individual o comparado.
-- Selección de personalidad (en modo individual).
-- Captura de pregunta/tema del usuario.
-- Visualización de respuestas:
-  - una respuesta en chat individual,
-  - tres respuestas separadas en análisis comparado,
-  - síntesis opcional.
-- Historial de conversación por sesión activa.
+- Conexión a WhatsApp mediante Baileys (QR Authentication).
+- Gestión de grupos: detectar mensajes en el grupo de paradiplomacia.
+- Detección de menciones o comandos: identificar cuando mencionados o llamado.
+- Réplica automática o respondida a preguntas de estudiantes.
+- Gestión de estado de conexión y reconexiones.
 
 Módulos sugeridos:
 
-- Vista principal de conversación.
-- Selector de personalidad.
-- Selector de modo.
-- Panel de respuestas comparadas.
-- Servicio API client.
+- Inicialización de Baileys.
+- Manejador de mensajes entrantes.
+- Procesador de comandos.
+- Interfaz con el servicio de chat.
 
 ## 3.2 Backend API (MVP)
 
 Responsabilidades:
 
-- Exponer endpoints REST para conversación.
+- Exponer endpoints REST para chat.
 - Gestionar sesión y contexto reciente.
 - Resolver configuración de personalidades.
 - Construir prompts finales por personalidad.
@@ -63,83 +56,9 @@ Capas internas sugeridas:
 
 ## 4. Estructura de carpetas propuesta
 
-La siguiente estructura separa claramente frontend y backend, y muestra los archivos sugeridos para cada carpeta.
+La siguiente estructura separa claramente backend (bot + API) y muestra los archivos sugeridos para cada carpeta.
 
-### 4.1 Frontend
-
-```text
-frontend/
-├─ package.json
-├─ tsconfig.json
-├─ tsconfig.app.json
-├─ tsconfig.node.json
-├─ vite.config.ts
-├─ eslint.config.js
-├─ index.html
-├─ .env.example
-├─ public/
-└─ src/
-  ├─ main.tsx
-  ├─ App.tsx
-  ├─ index.css
-  ├─ App.css
-  ├─ assets/
-  ├─ app/
-  │  ├─ router.tsx
-  │  ├─ providers.tsx
-  │  └─ store.ts
-  ├─ shared/
-  │  ├─ api/
-  │  │  └─ httpClient.ts
-  │  ├─ components/
-  │  │  ├─ Button.tsx
-  │  │  ├─ Header.tsx
-  │  │  └─ Layout.tsx
-  │  ├─ hooks/
-  │  │  ├─ useChat.ts
-  │  │  └─ useSession.ts
-  │  ├─ types/
-  │  │  ├─ chat.ts
-  │  │  └─ personality.ts
-  │  └─ utils/
-  │     ├─ formatDate.ts
-  │     └─ normalizeResponse.ts
-  ├─ features/
-  │  ├─ chat/
-  │  │  ├─ api/
-  │  │  ├─ components/
-  │  │  ├─ hooks/
-  │  │  ├─ pages/
-  │  │  ├─ types/
-  │  │  └─ index.ts
-  │  ├─ personalities/
-  │  │  ├─ api/
-  │  │  ├─ components/
-  │  │  ├─ hooks/
-  │  │  ├─ pages/
-  │  │  ├─ types/
-  │  │  └─ index.ts
-  │  ├─ comparison/
-  │  │  ├─ api/
-  │  │  ├─ components/
-  │  │  ├─ hooks/
-  │  │  ├─ pages/
-  │  │  ├─ types/
-  │  │  └─ index.ts
-  │  └─ auth/  
-  │     ├─ api/
-  │     ├─ components/
-  │     ├─ hooks/
-  │     ├─ pages/
-  │     ├─ types/
-  │     └─ index.ts
-  └─ styles/
-    ├─ globals.css
-    ├─ theme.css
-    └─ variables.css
-```
-
-### 4.2 Backend
+### 4.1 Backend (Bot + API)
 
 ```text
 backend/
@@ -152,10 +71,18 @@ backend/
 ├─ src/
 │  ├─ app.js
 │  ├─ server.js
+│  ├─ bot/
+│  │  ├─ baileys.js
+│  │  ├─ client.js
+│  │  ├─ handlers/
+│  │  │  ├─ message.handler.js
+│  │  │  └─ group.handler.js
+│  │  └─ services/
+│  │     └─ bot.service.js
 │  ├─ config/
 │  │  ├─ env.js
 │  │  ├─ prisma.js
-│  │  └─ websocket.js
+│  │  └─ whatsapp.js
 │  ├─ controllers/
 │  │  ├─ chat.controller.js
 │  │  ├─ personalities.controller.js
@@ -178,7 +105,7 @@ backend/
 │  ├─ middlewares/
 │  │  ├─ errorHandler.js
 │  │  ├─ auth.js
-│  │  └─ validateRequest.js
+│  │  ��─ validateRequest.js
 │  ├─ utils/
 │  │  ├─ logger.js
 │  │  ├─ constants.js
@@ -190,9 +117,10 @@ backend/
 
 Notas de implementación:
 
-- En frontend, el MVP solo necesita `chat/`, `personalities/` y `comparison/`; `auth/` puede quedar preparado para una fase posterior.
-- En backend, `websocket.js` puede existir como preparación, aunque no es obligatorio para el MVP.
-- En esta fase, Express debe usarse sin TypeScript para reducir complejidad de arranque y alinearse con la estructura de backend que indicaste.
+- Baileys permite conexión a WhatsApp sin API externa.
+- El bot usa autenticación por QR la primera vez.
+- El bot debe integrarse a un grupo específico de WhatsApp.
+- El modo "solo" o "comparado" puede activarse por comando.
 
 ## 5. Motor de personalidades
 
@@ -208,9 +136,9 @@ Cada personalidad se define por configuración (no hardcode en lógica):
 
 Perfiles iniciales:
 
-- economista,
-- politest,
-- jurista.
+- Economista,
+- Politólogo,
+- Jurista.
 
 ## 6. Persistencia (MVP)
 
@@ -219,9 +147,10 @@ Datos mínimos a guardar:
 - sesión,
 - mensajes usuario/sistema,
 - modo de consulta,
-- personalidad usada,
+- personalityId,
 - timestamp,
-- metadatos básicos de sesión.
+- metadata del grupo de WhatsApp,
+- metadata del mensaje.
 
 Opciones recomendadas:
 
@@ -229,32 +158,33 @@ Opciones recomendadas:
 
 ## 7. Flujos de ejecución
 
-### 7.1 Flujo A: chat individual
+### 7.1 Flujo A: Respuesta automática en grupo
 
-1. Frontend envía pregunta + personalidad + sessionId.
-2. Backend obtiene prompt base de la personalidad.
-3. Backend arma prompt final (instrucciones + pregunta + contexto de sesión).
-4. Backend invoca LLM.
-5. Backend guarda mensaje y respuesta.
-6. Frontend muestra respuesta.
+1. El bot recibe un mensaje del grupo de paradiplomacia.
+2. El bot detecta mención o comando (@bot, !economista, !politologo, etc.).
+3. El backend obtiene prompt base de la personalidad seleccionada.
+4. El backend arma prompt final (instrucciones + pregunta + contexto de sesión).
+5. El backend invoca LLM.
+6. El bot envía la respuesta al grupo.
+7. Se guarda el mensaje y la respuesta.
 
-### 7.2 Flujo B: análisis comparado
+### 7.2 Flujo B: Análisis сравнениы (modo comparado)
 
-1. Frontend envía tema + sessionId en modo comparado.
-2. Backend ejecuta pipeline por cada personalidad.
-3. Backend obtiene 3 respuestas separadas.
+1. El usuario envía comando comparativo.
+2. El backend ejecuta pipeline por cada personalidad.
+3. El backend obtiene 3 respuestas separadas.
 4. Opcional: genera síntesis institucional.
 5. Guarda resultados y retorna payload estructurado.
-6. Frontend renderiza bloques por experto.
+6. El bot envía respuesta formateada al grupo.
 
 ## 8. Diseño de API (mínimo sugerido)
 
-- POST /api/chat/individual
-  - input: sessionId, personalityId, message
+- POST /api/chat/whatsapp
+  - input: sessionId, personalityId, message, groupId, messageId
   - output: response, metadata
 
 - POST /api/chat/comparative
-  - input: sessionId, message
+  - input: sessionId, message, groupId
   - output: responses[3], optionalSummary, metadata
 
 - GET /api/personalities
@@ -266,6 +196,12 @@ Opciones recomendadas:
 - GET /api/sessions/:id/messages
   - output: historial de la sesión
 
+- POST /api/bot/connect
+  - output: status, qrCode (para autenticación inicial)
+
+- GET /api/bot/status
+  - output: connectionStatus
+
 ## 9. Modelo de datos mínimo
 
 Entidades:
@@ -273,7 +209,8 @@ Entidades:
 - Session:
   - id,
   - createdAt,
-  - mode.
+  - mode,
+  - groupId (nullable).
 
 - Message:
   - id,
@@ -281,6 +218,8 @@ Entidades:
   - role (user/assistant/system),
   - personalityId (nullable en mensajes de usuario),
   - content,
+  - groupId,
+  - messageId (messageID de WhatsApp),
   - createdAt.
 
 - Personality:
@@ -291,4 +230,41 @@ Entidades:
   - basePrompt,
   - isActive.
 
+- Group:
+  - id,
+  - whatsappGroupId,
+  - name,
+  - isActive,
+  - createdAt.
+
 Si se usa Prisma, estas entidades pueden mapearse directamente en `backend/prisma/schema.prisma`.
+
+## 10. Integración con WhatsApp (Baileys v6)
+
+### 10.1 Autenticación
+
+- Primera vez: generar QR para escanear con WhatsApp.
+- Sesiones persistidas en disco para reconexión automática.
+- Manejo de eventos de conexión/desconexión.
+
+### 10.2 Manejo de grupos
+
+- Unirse al grupo de paradiplomacia mediante link invitation.
+- Escuchar mensajes del grupo exclusivamente.
+- Responder en el mismo grupo.
+
+### 10.3 Comandos sugeridos
+
+- @bot - mención directa al bot.
+- !economista - responde solo como Economista.
+- !politologo - responde solo como Politólogo.
+- !jurista - responde solo como Jurista.
+- !compare - análisis comparado de las 3 personalidades.
+- !ayuda - muestra comandos disponibles.
+
+## 11. Consideraciones deWhatsApp
+
+- WhatsApp tiene límites de tasa (rate limits).
+- No enviar mensajes muy rápidos para evitar bloquo.
+- Respetar términos de servicio de WhatsApp.
+- Baileys es no oficial, usar con precaución en producción.
