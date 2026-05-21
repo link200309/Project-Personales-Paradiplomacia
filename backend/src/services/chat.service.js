@@ -8,10 +8,51 @@ import {
   ensureSessionForUser,
   listSessionMessages,
 } from "./sessions.service.js";
+import { prisma } from "../config/prisma.js";
 import { updateSession } from "../repositories/sessions.repository.js";
 import { PERSONALITY_IDS } from "../utils/constants.js";
+import { env } from "../config/env.js";
 
 const MAX_CONTEXT_MESSAGES = 6;
+
+async function ensureChatUser(userId, fallbackName) {
+  const existing = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  const emailLocalPart = String(userId || fallbackName || "system")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "") || "system";
+
+  return prisma.user.create({
+    data: {
+      id: userId,
+      email: `${emailLocalPart}@system.local`,
+      name: fallbackName || env.DEFAULT_USER_NAME,
+      passwordHash: null,
+    },
+  });
+}
+
+function buildContext(history) {
+  const contextSlice = Array.isArray(history)
+    ? history.slice(-MAX_CONTEXT_MESSAGES)
+    : [];
+
+  const contextText = contextSlice
+    .map((message) => {
+      const roleLabel = message.role === "assistant" ? "Asistente" : "Usuario";
+      return `${roleLabel}: ${message.content}`;
+    })
+    .join("\n");
+
+  return { contextSlice, contextText };
+}
 
 const PERSONALITY_FOCUS = {
   economist:
@@ -69,12 +110,22 @@ export async function processWhatsAppChat({
     throw error;
   }
 
+  await ensureChatUser(userId, "WhatsApp Bot");
+
   const session = await ensureSessionForUser({
     sessionId,
     mode: "individual",
     userId,
     groupId,
   });
+
+  const sessionPersonalityId = session.personalityId ?? personalityId;
+  if (!session.personalityId && sessionPersonalityId) {
+    await updateSession(session.id, {
+      personalityId: sessionPersonalityId,
+      title: personality.name,
+    });
+  }
 
   const userMessage = {
     id: crypto.randomUUID(),
@@ -163,6 +214,7 @@ function buildSystemPrompt(personality) {
 
   return [
     `Eres ${personality.name}.`,
+    "Responde solo desde tu propio rol, sin mezclar las otras perspectivas.",
     voiceProfile ? `Actua como ${voiceProfile.roleTitle}.` : "",
     `Rol: ${personality.roleDescription}`,
     `Estilo de respuesta: ${personality.styleGuide}`,
@@ -181,6 +233,7 @@ function buildSystemPrompt(personality) {
     "Responde directo al punto y evita relleno.",
     "No uses frases de relleno ni introducciones largas.",
     "No menciones que estas siguiendo prompts internos.",
+    "Si la consulta es una pregunta corta, responde con una explicacion breve y util; si es analitica, estructura la respuesta con idea central, desarrollo y cierre.",
     limits.length > 0 ? `Limites tematicos: ${limits.join("; ")}` : "",
   ]
     .filter(Boolean)
@@ -251,6 +304,8 @@ export async function processIndividualChat({
     error.statusCode = 400;
     throw error;
   }
+
+  await ensureChatUser(userId, env.DEFAULT_USER_NAME);
 
   const session = await ensureSessionForUser({
     sessionId,
@@ -359,6 +414,8 @@ export async function processIndividualChatStream({
     error.statusCode = 400;
     throw error;
   }
+
+  await ensureChatUser(userId, env.DEFAULT_USER_NAME);
 
   const session = await ensureSessionForUser({
     sessionId,

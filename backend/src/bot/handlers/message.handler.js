@@ -1,17 +1,100 @@
 import { sock, getMe } from "../client.js"
 import { parseCommand, getHelpText, shouldRespond } from "../services/command.service.js"
-import { processIndividualChat } from "../../services/chat.service.js"
+import { processWhatsAppChat } from "../../services/chat.service.js"
 import { env } from "../../config/env.js"
 
 const BOT_GROUP_JID = env.BOT_GROUP_JID
+const BOT_USER_ID = "whatsapp-bot"
+
+const COMMAND_TO_PERSONALITY = {
+  economista: "economist",
+  politologo: "politest",
+  jurista: "jurist",
+}
+
+function makeStableSessionId(groupJid, suffix) {
+  return `whatsapp-${groupJid}-${suffix}`.replace(/[^a-zA-Z0-9_-]+/g, "-")
+}
+
+async function runPersonaCommand({ groupJid, command, args, messageId }) {
+  const personalityId = COMMAND_TO_PERSONALITY[command]
+
+  if (!personalityId) {
+    return null
+  }
+
+  if (!args) {
+    return `Por favor, escribe tu pregunta después del comando.\n\nEjemplo: !${command} ¿Qué es la paradiplomacia?`
+  }
+
+  const result = await processWhatsAppChat({
+    sessionId: makeStableSessionId(groupJid, personalityId),
+    personalityId,
+    message: args,
+    groupId: groupJid,
+    messageId,
+    userId: BOT_USER_ID,
+  })
+
+  return result.response?.content || "No pude generar una respuesta."
+}
+
+async function runCompareCommand({ groupJid, args, messageId }) {
+  if (!args) {
+    return "Por favor, escribe el tema a analizar.\n\nEjemplo: !compare ¿Cómo afecta la paradiplomacia al desarrollo territorial?"
+  }
+
+  const [economistResult, politestResult, juristResult] = await Promise.all([
+    processWhatsAppChat({
+      sessionId: makeStableSessionId(groupJid, "compare-economist"),
+      personalityId: "economist",
+      message: args,
+      groupId: groupJid,
+      messageId,
+      userId: BOT_USER_ID,
+    }),
+    processWhatsAppChat({
+      sessionId: makeStableSessionId(groupJid, "compare-politest"),
+      personalityId: "politest",
+      message: args,
+      groupId: groupJid,
+      messageId,
+      userId: BOT_USER_ID,
+    }),
+    processWhatsAppChat({
+      sessionId: makeStableSessionId(groupJid, "compare-jurist"),
+      personalityId: "jurist",
+      message: args,
+      groupId: groupJid,
+      messageId,
+      userId: BOT_USER_ID,
+    }),
+  ])
+
+  return `📊 *Análisis Comparado: ${args}*\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*🤓 ECONOMISTA:*\n${economistResult.response?.content || "Sin respuesta"}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*🏛️ POLITÓLOGO:*\n${politestResult.response?.content || "Sin respuesta"}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*⚖️ JURISTA:*\n${juristResult.response?.content || "Sin respuesta"}`
+}
+
+async function handleDefaultCommand(messageText, groupJid, messageId) {
+  const result = await processWhatsAppChat({
+    sessionId: makeStableSessionId(groupJid, "politest-default"),
+    personalityId: "politest",
+    message: messageText,
+    groupId: groupJid,
+    messageId,
+    userId: BOT_USER_ID,
+  })
+
+  return result.response?.content || "No pude generar una respuesta."
+}
 
 export async function handleIncomingMessage(message) {
   try {
     const chatJid = message.key?.remoteJid
     const messageId = message.key?.id
-    const messageText = message.message?.conversation || 
-                      message.message?.extendedTextMessage?.text || 
-                      ""
+    const messageText =
+      message.message?.conversation ||
+      message.message?.extendedTextMessage?.text ||
+      ""
     const senderJid = message.key?.participant
     const pushName = message.pushName || "Unknown"
 
@@ -24,12 +107,7 @@ export async function handleIncomingMessage(message) {
       return
     }
 
-    const shouldAnswer = shouldRespond(
-      messageText,
-      message.message?.extendedTextMessage?.contextInfo?.mentionedJid
-    )
-
-    if (!shouldAnswer) {
+    if (!shouldRespond(messageText)) {
       return
     }
 
@@ -43,17 +121,25 @@ export async function handleIncomingMessage(message) {
     console.log(`[Bot] Mensaje de ${pushName}: ${messageText}`)
 
     const parsed = parseCommand(messageText)
-    
-    let responseText
+    let responseText = null
 
     if (parsed?.command === "ayuda") {
       responseText = getHelpText()
-    } else if (parsed?.personalityId) {
-      responseText = await handleIndividualCommand(parsed)
     } else if (parsed?.command === "compare") {
-      responseText = await handleCompareCommand(parsed)
-    } else {
-      responseText = await handleDefaultCommand(messageText)
+      responseText = await runCompareCommand({
+        groupJid: chatJid,
+        args: parsed.args,
+        messageId,
+      })
+    } else if (parsed?.command && COMMAND_TO_PERSONALITY[parsed.command]) {
+      responseText = await runPersonaCommand({
+        groupJid: chatJid,
+        command: parsed.command,
+        args: parsed.args,
+        messageId,
+      })
+    } else if (messageText.toLowerCase().includes("@bot")) {
+      responseText = await handleDefaultCommand(messageText, chatJid, messageId)
     }
 
     if (responseText) {
@@ -62,101 +148,6 @@ export async function handleIncomingMessage(message) {
   } catch (error) {
     console.error("[Bot] Error al procesar mensaje:", error)
   }
-}
-
-async function handleIndividualCommand(parsed) {
-  const { personalityId, args } = parsed
-
-  if (!args) {
-    return "Por favor, escribe tu pregunta después del comando.\n\nEjemplo: !economista ¿Qué es la paradiplomacia?"
-  }
-
-  try {
-    const result = await processIndividualChat({
-      sessionId: `whatsapp-${Date.now()}`,
-      personalityId,
-      message: args,
-      userId: "whatsapp-bot",
-    })
-
-    return formatResponse(result.response?.content || "No pude generar una respuesta.")
-  } catch (error) {
-    console.error("[Bot] Error en comando individual:", error)
-    return "Hubo un error al procesar tu solicitud. Intenta de nuevo."
-  }
-}
-
-async function handleCompareCommand(parsed) {
-  const topic = parsed.args
-
-  if (!topic) {
-    return "Por favor, escribe el tema a analizar.\n\nEjemplo: !compare ¿Cómo afecta la paradiplomacia al desarrollo territorial?"
-  }
-
-  try {
-    const economistResult = await processIndividualChat({
-      sessionId: `compare-${Date.now()}-economist`,
-      personalityId: "economist",
-      message: topic,
-      userId: "whatsapp-bot",
-    })
-
-    const politestResult = await processIndividualChat({
-      sessionId: `compare-${Date.now()}-politest`,
-      personalityId: "politest",
-      message: topic,
-      userId: "whatsapp-bot",
-    })
-
-    const juristResult = await processIndividualChat({
-      sessionId: `compare-${Date.now()}-jurist`,
-      personalityId: "jurist",
-      message: topic,
-      userId: "whatsapp-bot",
-    })
-
-    return `📊 *Análisis Comparado: ${topic}*
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-*🤓 ECONOMISTA:*
-${economistResult.response?.content || "Sin respuesta"}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-*🏛️ POLITÓLOGO:*
-${politestResult.response?.content || "Sin respuesta"}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-*⚖️ JURISTA:*
-${juristResult.response?.content || "Sin respuesta"}`
-  } catch (error) {
-    console.error("[Bot] Error en comparación:", error)
-    return "Hubo un error al generar el análisis comparado. Intenta de nuevo."
-  }
-}
-
-async function handleDefaultCommand(messageText) {
-  try {
-    const result = await processIndividualChat({
-      sessionId: `whatsapp-${Date.now()}`,
-      personalityId: "politest",
-      message: messageText,
-      userId: "whatsapp-bot",
-    })
-
-    return result.response?.content || "No pude generar una respuesta."
-  } catch (error) {
-    console.error("[Bot] Error en comando por defecto:", error)
-    return `Hola 👋 Soy el asistente de Paradiplomacia IDEI.
-
-Usa *!ayuda* para ver los comandos disponibles.`
-  }
-}
-
-function formatResponse(content) {
-  return content
 }
 
 async function sendResponse(groupJid, text) {

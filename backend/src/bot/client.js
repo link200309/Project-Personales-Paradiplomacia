@@ -1,6 +1,6 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "baileys"
-import { existsSync, mkdirSync } from "fs"
-import { dirname } from "path"
+import { existsSync, mkdirSync, rmSync } from "fs"
+import { dirname, resolve } from "path"
 import { fileURLToPath } from "url"
 import QRCode from "qrcode"
 
@@ -8,8 +8,7 @@ import { handleIncomingMessage } from "./handlers/message.handler.js"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-const SESSION_DIR = "./sessions"
-const SESSION_FILE = "auth.json"
+const SESSION_DIR = resolve(__dirname, "../../sessions/auth.json")
 
 export let sock = null
 export let connectionState = {
@@ -26,11 +25,16 @@ function ensureSessionDir() {
   }
 }
 
+function clearSessionDir() {
+  if (existsSync(SESSION_DIR)) {
+    rmSync(SESSION_DIR, { recursive: true, force: true })
+  }
+}
+
 async function getAuthState() {
   ensureSessionDir()
-  const sessionPath = `${SESSION_DIR}/${SESSION_FILE}`
-  
-  return await useMultiFileAuthState(sessionPath)
+
+  return await useMultiFileAuthState(SESSION_DIR)
 }
 
 export async function initBot() {
@@ -72,8 +76,17 @@ export async function initBot() {
           connectionState.isConnected = false
           initBot()
         } else {
+          clearSessionDir()
+          sock = null
           connectionState.isConnected = false
+          connectionState.isConnecting = false
+          connectionState.qr = null
+          connectionState.qrDataURL = null
           connectionState.lastError = "Sesión cerrada - necesitas autenticarte de nuevo"
+          initBot().catch((error) => {
+            console.error("[Baileys] No se pudo reiniciar sesión limpia:", error)
+            connectionState.lastError = error.message
+          })
         }
       }
 
@@ -142,6 +155,8 @@ export async function disconnectBot() {
     sock = null
     connectionState.isConnected = false
     connectionState.isConnecting = false
+    connectionState.qr = null
+    connectionState.qrDataURL = null
     console.log("[Baileys] Bot desconectado")
   }
 }

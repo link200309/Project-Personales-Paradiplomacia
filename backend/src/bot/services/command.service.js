@@ -13,24 +13,25 @@ export function parseCommand(messageText) {
     return null
   }
 
-  const text = messageText.trim().toLowerCase()
+  const text = messageText.trim()
+  const lowerText = text.toLowerCase()
   
   for (const [name, cmd] of Object.entries(BotCommand)) {
-    if (text.startsWith(`!${cmd}`)) {
+    const commandPattern = new RegExp(`^!${cmd}(?:\\s+|$)`, "i")
+
+    if (commandPattern.test(text)) {
       const rest = text.slice(cmd.length + 1).trim()
       return {
         command: cmd,
-        personalityId: getPersonalityIdFromCommand(cmd),
         args: rest,
         raw: messageText,
       }
     }
   }
 
-  if (text.includes("@bot") || text.startsWith("hola")) {
+  if (lowerText.includes("@bot")) {
     return {
       command: "mention",
-      personalityId: null,
       args: messageText,
       raw: messageText,
     }
@@ -68,13 +69,5 @@ _Ejemplo:_ !compare ¿Qué es la paradiplomacia?`
 export function shouldRespond(messageText, mentionedJids) {
   if (!messageText) return false
   
-  const text = messageText.toLowerCase()
-  
-  if (text.includes("@bot")) return true
-  
-  for (const cmd of Object.values(BotCommand)) {
-    if (text.startsWith(`!${cmd}`)) return true
-  }
-  
-  return false
+  return parseCommand(messageText) !== null
 }
